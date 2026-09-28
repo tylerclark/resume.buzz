@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { emailOTP } from "better-auth/plugins";
@@ -8,11 +8,14 @@ import { redirect } from "next/navigation";
 import { Resend } from "resend";
 import { db, schema } from "@/db";
 
-// Optional comma-separated allowlist. Empty = anyone can sign in.
+// Private beta: comma-separated allowlist. Empty = nobody can sign in (fail closed).
 const allowed = (process.env.ALLOWED_EMAILS ?? "")
   .split(",")
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
+
+const isAllowed = (email: unknown) => typeof email === "string" && allowed.includes(email.trim().toLowerCase());
+const GATED_PATHS = new Set(["/email-otp/send-verification-otp", "/sign-in/email-otp"]);
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -20,15 +23,23 @@ export const auth = betterAuth({
     schema: { user: schema.user, session: schema.session, account: schema.account, verification: schema.verification },
   }),
   session: { expiresIn: 60 * 60 * 24 * 30 },
+  hooks: {
+    // Enforced here (not only inside sendVerificationOTP) because better-auth
+    // swallows errors thrown from the send callback and reports success anyway.
+    before: createAuthMiddleware(async (ctx) => {
+      if (GATED_PATHS.has(ctx.path) && !isAllowed(ctx.body?.email)) {
+        throw new APIError("FORBIDDEN", { message: "resume.buzz is in private beta. This email isn't on the invite list." });
+      }
+    }),
+  },
   plugins: [
     emailOTP({
       otpLength: 6,
       expiresIn: 600,
       storeOTP: "hashed",
       async sendVerificationOTP({ email, otp }) {
-        if (allowed.length && !allowed.includes(email.toLowerCase())) {
-          throw new APIError("FORBIDDEN", { message: "This email isn't on the invite list." });
-        }
+        // Belt and braces: never email anyone off the list even if the hook is bypassed.
+        if (!isAllowed(email)) return;
         const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
           from: process.env.EMAIL_FROM ?? "resume.buzz <login@resume.buzz>",
           to: email,
