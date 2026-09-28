@@ -72,6 +72,7 @@ export function LoginForm({ next }: { next: string }) {
         id="otp"
         inputMode="numeric"
         autoComplete="one-time-code"
+        data-1p-ignore
         autoFocus
         required
         maxLength={6}
