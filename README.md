@@ -16,6 +16,26 @@
 
 ---
 
+## Screenshots
+
+Example data: a fictional candidate, three fictional postings.
+
+<p align="center">
+  <img src="docs/screenshots/job.png" alt="A tailored job: match score with before and after, requirement-by-requirement breakdown, and the tailored resume" width="100%">
+</p>
+
+| Every change, word by word | Keywords you hit and the ones you can fill in |
+| --- | --- |
+| ![Word-level diff of the tailored resume](docs/screenshots/diff.png) | ![Keyword hits and misses](docs/screenshots/keywords.png) |
+
+| Cover letter from the tailored resume | Several jobs at once, each a tab |
+| --- | --- |
+| ![Cover letter with a prompt and generated text](docs/screenshots/cover-letter.png) | ![New job tab with recent jobs and scores](docs/screenshots/new-job.png) |
+
+<p align="center">
+  <img src="docs/screenshots/progress.png" alt="The pipeline running in the background: extract, score, tailor, rescore" width="100%">
+</p>
+
 ## What it does
 
 You keep one **base resume**. For every job you paste in, resume.buzz:
