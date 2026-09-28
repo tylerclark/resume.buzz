@@ -19,7 +19,7 @@ pnpm dev
 - `/login` — email → 6-digit code
 - `/` — workspace (paste URL, recent jobs)
 - `/j/[id]` — a tailored job: match score, requirements, keywords, diff toggle, prompt, cover letter
-- `/base` — base resume editor (PDF/DOCX import)
+- "Base resume" drawer (header button) — edit base resume, PDF/DOCX import
 - `/https://…` — prefix any posting URL to start tailoring it
 
 Schema changes: edit `src/db/schema.ts`, then `pnpm db:generate && pnpm db:migrate`.

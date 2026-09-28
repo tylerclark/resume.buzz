@@ -8,6 +8,7 @@ import type { Job } from "@/db/schema";
 import { authClient } from "@/lib/auth-client";
 import type { JobSummary } from "@/lib/data";
 import { DEFAULT_PROMPT, type Resume } from "@/lib/types";
+import { BaseResumeDrawer } from "./base-resume-drawer";
 import { Logo } from "./logo";
 import { baseModel, countChanges, ResumeDoc, tailoredModel } from "./resume-doc";
 
@@ -35,7 +36,10 @@ const btnDark =
   "bg-ink hover:bg-ink-hover text-white border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer whitespace-nowrap";
 
 function initials(s: string) {
-  const parts = s.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  const parts = s
+    .replace(/@.*/, "")
+    .split(/[\s._-]+/)
+    .filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
@@ -217,9 +221,9 @@ export function Workspace({
                   <div className="text-[12.5px] text-subtle">
                     Upload a PDF or DOCX once. Every tailored version is built from it.
                   </div>
-                  <Link href="/base" className={`${btnDark} self-start hover:no-underline hover:text-white`}>
+                  <button onClick={() => setBaseDrawer(true)} className={`${btnDark} self-start`}>
                     Add base resume →
-                  </Link>
+                  </button>
                 </div>
               )}
 
@@ -267,7 +271,11 @@ export function Workspace({
                       const done = i < step,
                         active = i === step;
                       return (
-                        <li key={i} className="flex gap-2.5 items-center" style={{ opacity: done || active ? 1 : 0.45 }}>
+                        <li
+                          key={i}
+                          className="flex gap-2.5 items-center"
+                          style={{ opacity: done || active ? 1 : 0.45 }}
+                        >
                           <div
                             className="w-5 h-5 rounded-full grid place-items-center flex-none text-white text-[11px] font-extrabold border-2 box-border"
                             style={{
@@ -281,7 +289,9 @@ export function Workspace({
                             <div className="text-[13px] font-semibold">{st.label}</div>
                             <div className="text-[11.5px] text-subtle leading-[1.4]">{st.sub}</div>
                           </div>
-                          <span className={`text-[11px] font-bold whitespace-nowrap ${done ? "text-ok-ink" : "text-brand"}`}>
+                          <span
+                            className={`text-[11px] font-bold whitespace-nowrap ${done ? "text-ok-ink" : "text-brand"}`}
+                          >
                             {done ? "done" : active ? "working…" : ""}
                           </span>
                         </li>
@@ -492,7 +502,11 @@ export function Workspace({
                       + {label}
                     </button>
                   ))}
-                  <button onClick={generateCover} disabled={coverBusy} className={`${btnPrimary} ml-auto px-4 py-[9px]`}>
+                  <button
+                    onClick={generateCover}
+                    disabled={coverBusy}
+                    className={`${btnPrimary} ml-auto px-4 py-[9px]`}
+                  >
                     {coverBusy ? "Writing…" : cover ? "Regenerate" : "Generate cover letter"}
                   </button>
                 </div>
@@ -538,54 +552,7 @@ export function Workspace({
         </section>
       </div>
 
-      {baseDrawer && (
-        <>
-          <div onClick={() => setBaseDrawer(false)} className="fixed inset-0 bg-[rgba(15,27,61,.35)]" />
-          <div className="fixed top-0 right-0 bottom-0 w-[440px] max-w-full bg-white shadow-[-12px_0_40px_rgba(15,27,61,.18)] flex flex-col">
-            <div className="flex justify-between items-center px-5 py-4 border-b border-line">
-              <div className="font-extrabold text-[15px]">Base resume</div>
-              <button
-                onClick={() => setBaseDrawer(false)}
-                className="bg-transparent border-0 text-[18px] cursor-pointer text-subtle"
-              >
-                ×
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-              {base ? (
-                <>
-                  <DrawerCard title="Headline" body={base.headline} />
-                  {base.sections.flatMap((s, si) =>
-                    s.entries.map((e, ei) => (
-                      <DrawerCard
-                        key={`${si}-${ei}`}
-                        title={e.org ? `${s.title} — ${e.org}` : s.title}
-                        body={e.bullets.map((b) => (e.role ? `• ${b}` : b)).join("\n")}
-                      />
-                    )),
-                  )}
-                </>
-              ) : (
-                <p className="text-[13px] text-subtle">No base resume yet.</p>
-              )}
-            </div>
-            <div className="px-5 py-3.5 border-t border-line flex justify-end">
-              <Link href="/base" className={`${btnDark} hover:no-underline hover:text-white`}>
-                Open editor
-              </Link>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function DrawerCard({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="border border-line rounded-[10px] px-3.5 py-3">
-      <div className="text-[11px] font-extrabold tracking-[.08em] uppercase text-faint mb-1.5">{title}</div>
-      <div className="text-[12.5px] leading-[1.55] text-muted whitespace-pre-wrap">{body}</div>
+      {baseDrawer && <BaseResumeDrawer initial={base} onClose={() => setBaseDrawer(false)} />}
     </div>
   );
 }
@@ -621,15 +588,7 @@ function UserMenu({ user }: { user: { name: string; email: string } }) {
   );
 }
 
-function JobPanel({
-  job,
-  rawOpen,
-  setRawOpen,
-}: {
-  job: Job;
-  rawOpen: boolean;
-  setRawOpen: (v: boolean) => void;
-}) {
+function JobPanel({ job, rawOpen, setRawOpen }: { job: Job; rawOpen: boolean; setRawOpen: (v: boolean) => void }) {
   const pills = [job.pay, job.employmentType, job.level].filter(Boolean);
   const reqStyle = {
     hit: { glyph: "✓", bg: "#e6f7ee", fg: "#158a48" },
@@ -652,13 +611,21 @@ function JobPanel({
         {pills.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
             {pills.map((p) => (
-              <span key={p} className="text-[12px] font-semibold bg-white border border-line-2 px-[9px] py-1 rounded-full">
+              <span
+                key={p}
+                className="text-[12px] font-semibold bg-white border border-line-2 px-[9px] py-1 rounded-full"
+              >
                 {p}
               </span>
             ))}
           </div>
         )}
-        <a href={job.url} target="_blank" rel="noreferrer" className="text-[12.5px] font-semibold inline-flex gap-1.5 items-center">
+        <a
+          href={job.url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[12.5px] font-semibold inline-flex gap-1.5 items-center"
+        >
           Open original posting ↗
         </a>
       </div>
