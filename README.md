@@ -64,12 +64,12 @@ A small detail that matters: every model output goes through a **style guard** t
 
 ```mermaid
 flowchart LR
-  A[Paste URL or text] --> B[POST /api/tailor]
-  B -->|inserts job row, returns id| C[Browser polls GET /api/jobs?ids=]
-  B -->|after&#40;&#41;| D[scraping]
+  A["Paste a URL or text"] --> B["POST /api/tailor"]
+  B -- "inserts the job row, returns its id" --> C["Browser polls GET /api/jobs?ids="]
+  B -- "continues after the response" --> D[scraping]
   D --> E[extracting] --> F[scoring] --> G[tailoring] --> H[rescoring] --> I[done]
-  D -. Firecrawl .-> D
-  E & F & G & H -. Claude via AI Gateway .-> E
+  FC[Firecrawl] -.-> D
+  CL["Claude via AI Gateway"] -.-> E & F & G & H
   I --> C
 ```
 
