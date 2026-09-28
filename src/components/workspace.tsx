@@ -84,6 +84,9 @@ export function Workspace({
   const [draft, setDraft] = useState<StoredTailored | null>(null); // non-null = editing the tailored resume
   const [savingDraft, setSavingDraft] = useState(false);
   const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "delete" | null>(null);
+  // True from the moment a re-tailor is requested until the server confirms it's queued, so the resume
+  // pane reacts on click instead of waiting a round-trip (or two, when facts are saved first).
+  const [retailorPending, setRetailorPending] = useState(false);
 
   const [coverPrompt, setCoverPrompt] = useState(initialJob?.coverPrompt ?? "");
   const [coverDraft, setCoverDraft] = useState<string | null>(null); // non-null = editing the letter (blank line = new paragraph)
@@ -98,6 +101,8 @@ export function Workspace({
   const hasResume = !!job?.tailored;
   // Re-running tailoring on a job that already has a resume (prompt change, base change, new facts).
   const regen = inFlight && hasResume;
+  // Show the resume skeleton: the job is being re-tailored, or we just asked for it and are waiting on the server.
+  const retailoring = regen || retailorPending;
   // A brand-new job still going through scrape → extract → score → tailor.
   const building = inFlight && !hasResume;
   const cover = job?.coverLetter ?? null;
@@ -212,18 +217,23 @@ export function Workspace({
 
   // "I do have this experience": remember it for every job, then re-tailor this one with it.
   async function addFacts(facts: { keyword: string; detail: string }[]) {
-    const res = await fetch("/api/facts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ facts }),
-    });
-    if (!res.ok) {
-      setError((await res.json().catch(() => ({}))).error ?? "Couldn't save that.");
-      return false;
+    setRetailorPending(true);
+    try {
+      const res = await fetch("/api/facts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facts }),
+      });
+      if (!res.ok) {
+        setError((await res.json().catch(() => ({}))).error ?? "Couldn't save that.");
+        return false;
+      }
+      router.refresh();
+      await regenerate(true);
+      return true;
+    } finally {
+      setRetailorPending(false);
     }
-    router.refresh();
-    await regenerate(true);
-    return true;
   }
 
   async function regenerate(skipConfirm = false) {
@@ -235,13 +245,18 @@ export function Workspace({
       !confirm("Regenerating replaces your manual edits. Continue?")
     )
       return;
-    const ok = await kick(
-      "/tailor",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) },
-      { stage: "queued", error: null, prompt },
-      "regen",
-    );
-    if (ok) setPromptOpen(false);
+    setRetailorPending(true);
+    try {
+      const ok = await kick(
+        "/tailor",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) },
+        { stage: "queued", error: null, prompt },
+        "regen",
+      );
+      if (ok) setPromptOpen(false);
+    } finally {
+      setRetailorPending(false);
+    }
   }
 
   async function retry() {
@@ -344,12 +359,15 @@ export function Workspace({
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <div
-                className="font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate"
+              <a
+                href={job.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate text-ink hover:text-brand"
                 title={job.title || job.url}
               >
                 {job.title || hostOf(job.url)}
-              </div>
+              </a>
               <div className={`text-[12px] truncate ${inFlight ? "text-brand" : failed ? "text-bad" : "text-muted"}`}>
                 {inFlight
                   ? `${JOB_STAGES[job.stage].label}…`
@@ -652,14 +670,6 @@ export function Workspace({
                   <span className={`${DIFF_STYLES.u.swatch} rounded-[3px] px-1`}>purple</span>.
                 </div>
               )}
-              {regen && (
-                <div className="w-full max-w-[720px] flex gap-3 items-center text-[12.5px] bg-brand-tint border border-[#c9dbf7] text-brand rounded-[10px] px-3.5 py-2.5">
-                  <Spinner className="w-4 h-4" />
-                  <span className="flex-1">
-                    <b>Re-tailoring…</b> You can switch tabs; this keeps going in the background.
-                  </span>
-                </div>
-              )}
               {stale && !editing && !inFlight && (
                 <div className="w-full max-w-[720px] flex gap-3 items-center text-[12.5px] bg-warn-bg border border-[#f0d9a8] text-[#6b4a00] rounded-[10px] px-3.5 py-2.5">
                   <span className="flex-1">
@@ -692,7 +702,9 @@ export function Workspace({
                   ))}
                 </div>
               )}
-              {draft && base ? (
+              {retailoring && !draft ? (
+                <ResumeSkeleton name={base?.name} contact={base?.contact} />
+              ) : draft && base ? (
                 <TailoredEditor value={draft} onChange={setDraft} name={base.name} contact={base.contact} />
               ) : model && base ? (
                 <ResumeDoc
@@ -808,6 +820,61 @@ export function Workspace({
 
       {baseDrawer && <BaseResumeDrawer initial={base} facts={facts} onClose={() => setBaseDrawer(false)} />}
     </div>
+  );
+}
+
+// Placeholder document shown while a resume is being re-tailored. Keeps the real name/contact so the page
+// doesn't jump, and pulses resume-shaped bars (heading, role lines, bullets) like the cover letter skeleton.
+function ResumeSkeleton({ name, contact }: { name?: string; contact?: string }) {
+  const sections: { role: boolean; bullets: number[] }[][] = [
+    [{ role: false, bullets: [100, 96, 88, 62] }],
+    [
+      { role: true, bullets: [98, 92, 84] },
+      { role: true, bullets: [95, 70] },
+      { role: true, bullets: [90, 96, 58] },
+    ],
+    [{ role: false, bullets: [80] }],
+  ];
+  let i = 0;
+  const bar = (w: number | string, h = "h-3", extra = "") => (
+    <div
+      key={i}
+      className={`${h} rounded-md bg-[#e6ebf5] animate-pulse-soft ${extra}`}
+      style={{ width: typeof w === "number" ? `${w}%` : w, animationDelay: `${(i++ % 12) * 0.1}s` }}
+    />
+  );
+  return (
+    <article
+      aria-busy="true"
+      aria-label="Re-tailoring your resume"
+      className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)]"
+    >
+      <div className="font-sans text-[12px] text-brand font-semibold mb-6 flex items-center gap-2">
+        <Spinner className="w-3.5 h-3.5" />
+        Re-tailoring… you can switch tabs; it keeps going in the background.
+      </div>
+      <header className="border-b-[1.5px] border-line-2 pb-3.5 mb-5 flex flex-col gap-2">
+        {name ? <div className="text-[28px] font-semibold tracking-[-.01em] text-faint">{name}</div> : bar(40, "h-7")}
+        {bar(55, "h-3.5")}
+        {contact ? <div className="text-[12.5px] text-faint font-sans">{contact}</div> : bar(70, "h-3")}
+      </header>
+      {sections.map((entries, si) => (
+        <section key={si} className="mb-6 flex flex-col gap-3">
+          {bar(88, "h-2.5", "!w-24 mb-1")}
+          {entries.map((e, ei) => (
+            <div key={ei} className="flex flex-col gap-2">
+              {e.role && (
+                <div className="flex justify-between items-center gap-3">
+                  {bar(45, "h-3.5")}
+                  {bar(18, "h-2.5")}
+                </div>
+              )}
+              <div className="pl-[18px] flex flex-col gap-2">{e.bullets.map((w) => bar(w))}</div>
+            </div>
+          ))}
+        </section>
+      ))}
+    </article>
   );
 }
 
@@ -1036,28 +1103,18 @@ function JobPanel({
 
   return (
     <>
-      <div className="flex flex-col gap-2.5">
-        {pills.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap">
-            {pills.map((p) => (
-              <span
-                key={p}
-                className="text-[12px] font-semibold bg-white border border-line-2 px-[9px] py-1 rounded-full"
-              >
-                {p}
-              </span>
-            ))}
-          </div>
-        )}
-        <a
-          href={job.url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-[12.5px] font-semibold inline-flex gap-1.5 items-center"
-        >
-          Open original posting ↗
-        </a>
-      </div>
+      {pills.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {pills.map((p) => (
+            <span
+              key={p}
+              className="text-[12px] font-semibold bg-white border border-line-2 px-[9px] py-1 rounded-full"
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex gap-4 items-center">
         <div
