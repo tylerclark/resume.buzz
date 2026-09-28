@@ -45,40 +45,42 @@
   }
 }
 
-body {
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  -webkit-font-smoothing: antialiased;
-}
+@layer base {
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+  }
 
-a {
-  color: var(--color-brand);
-}
-a:hover {
-  color: #0f52b8;
-  text-decoration: underline;
-}
+  a {
+    color: var(--color-brand);
+  }
+  a:hover {
+    color: #0f52b8;
+    text-decoration: underline;
+  }
 
-textarea:focus,
-input:focus {
-  outline: 2px solid var(--color-brand);
-  outline-offset: -1px;
-}
+  textarea:focus,
+  input:focus {
+    outline: 2px solid var(--color-brand);
+    outline-offset: -1px;
+  }
 
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-thumb {
-  background: #d3dae8;
-  border-radius: 8px;
-}
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d3dae8;
+    border-radius: 8px;
+  }
 
-.eyebrow {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-faint);
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-faint);
+  }
 }
 
 /* "Download PDF" = print just the document */
