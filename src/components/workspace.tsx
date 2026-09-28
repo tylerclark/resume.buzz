@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TailorEvent } from "@/app/api/tailor/route";
 import type { Job } from "@/db/schema";
+import { alignToBase } from "@/lib/align";
 import { authClient } from "@/lib/auth-client";
 import type { JobSummary } from "@/lib/data";
 import { DEFAULT_PROMPT, hasUserEdits, resumeHash, type Resume, type StoredTailored } from "@/lib/types";
@@ -91,7 +92,8 @@ export function Workspace({
   const isLoading = phase === "loading";
 
   const model = useMemo(() => {
-    if (job?.tailored) return tailoredModel(job.tailored);
+    // Always follow the base resume's section/entry order, even for jobs tailored before a reorder.
+    if (job?.tailored) return tailoredModel(base ? alignToBase(job.tailored, base) : job.tailored);
     return base ? baseModel(base) : null;
   }, [job, base]);
   const changes = job?.tailored && model ? countChanges(model) : { total: 0, user: 0 };
@@ -173,7 +175,7 @@ export function Workspace({
     if (!job?.tailored) return setBaseDrawer(true);
     setTab("resume");
     setPromptOpen(false);
-    setDraft(structuredClone(job.tailored));
+    setDraft(structuredClone(base ? alignToBase(job.tailored, base) : job.tailored));
   }
 
   async function saveDraft() {

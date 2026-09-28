@@ -13,6 +13,7 @@ import {
   type StoredTailored,
   type TailoredResume,
 } from "./types";
+import { alignToBase } from "./align";
 import { scrub, STYLE_RULES } from "./style";
 
 // Claude via Vercel AI Gateway (Anthropic Messages-compatible). On Vercel, OIDC works without a key.
@@ -85,7 +86,7 @@ export async function tailorResume(base: Resume, description: string, prompt: st
     `${prompt}
 
 Output format rules:
-- Return every section and entry from the base resume (you may reorder sections, entries and bullets).
+- Return every section and entry from the base resume, in exactly the same order as the base resume. Never reorder sections or entries (entries are in timeline order). You may reorder bullets within an entry.
 - For each bullet and the headline, "original" is the exact base-resume text it came from and "text" is your tailored version.
 - If a line is unchanged, set text equal to original.
 - To drop a base bullet, keep it with text "". To add a line that has no base source, use original "" (only when it restates facts already in the resume).
@@ -97,14 +98,17 @@ ${STYLE_RULES}`,
   );
   // Belt and braces: the rules above are a request; this makes them a guarantee.
   const clean = (l: { original: string; text: string }) => ({ ...l, text: scrub(l.text) });
-  return {
-    ...t,
-    headline: clean(t.headline),
-    sections: t.sections.map((s) => ({
-      ...s,
-      entries: s.entries.map((e) => ({ ...e, bullets: e.bullets.map(clean) })),
-    })),
-  };
+  return alignToBase(
+    {
+      ...t,
+      headline: clean(t.headline),
+      sections: t.sections.map((s) => ({
+        ...s,
+        entries: s.entries.map((e) => ({ ...e, bullets: e.bullets.map(clean) })),
+      })),
+    },
+    base,
+  );
 }
 
 export async function writeCoverLetter(
