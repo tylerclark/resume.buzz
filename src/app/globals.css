@@ -1,33 +1,110 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+@theme {
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, serif;
+  --font-mono: ui-monospace, Menlo, monospace;
+
+  --color-ink: #0f1b3d;
+  --color-ink-2: #1b2340;
+  --color-ink-hover: #1a2b5c;
+  --color-muted: #4a5578;
+  --color-subtle: #6b7592;
+  --color-faint: #8a94ad;
+  --color-line: #e3e8f2;
+  --color-line-2: #dbe2ef;
+  --color-line-3: #c5cfe2;
+  --color-canvas: #f4f6fb;
+  --color-panel: #f9fafd;
+  --color-well: #eef1f7;
+  --color-field: #fafbfe;
+  --color-chip: #e9eef8;
+  --color-brand: #1a6fe8;
+  --color-brand-hover: #1560cc;
+  --color-brand-tint: #eef3fc;
+  --color-ok: #22b55e;
+  --color-ok-ink: #158a48;
+  --color-ok-bg: #e6f7ee;
+  --color-ok-mark: #d3f5e1;
+  --color-warn-ink: #a56a00;
+  --color-warn-bg: #fff4dd;
+  --color-bad: #b23b3b;
+  --color-bad-bg: #fde8e8;
+  --color-bad-mark: #fde0e0;
+
+  --animate-pulse-soft: rbpulse 1.2s infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+@keyframes rbpulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+a {
+  color: var(--color-brand);
+}
+a:hover {
+  color: #0f52b8;
+  text-decoration: underline;
+}
+
+textarea:focus,
+input:focus {
+  outline: 2px solid var(--color-brand);
+  outline-offset: -1px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d3dae8;
+  border-radius: 8px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+/* "Download PDF" = print just the document */
+@media print {
+  @page {
+    margin: 0.5in;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-doc,
+  .print-doc * {
+    visibility: visible;
+  }
+  .print-doc {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+  .print-doc .diff-del {
+    display: none !important;
+  }
+  .print-doc .diff-add {
+    background: none !important;
   }
 }

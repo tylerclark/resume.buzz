@@ -1,54 +1,23 @@
-"use client";
+import { notFound, redirect } from "next/navigation";
 
-import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
-import axios from "axios";
+// resume.buzz/https://jobs.example.com/role → start tailoring that posting.
+export default async function PrefixedUrl({ params, searchParams }: PageProps<"/[...jobUrl]">) {
+  const { jobUrl } = await params;
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) {
+    for (const val of Array.isArray(v) ? v : [v ?? ""]) qs.append(k, val);
+  }
 
-export default function JobRewrite() {
-  const pathname = usePathname();
-  const [jobUrl, setJobUrl] = useState<string | null>(null);
-  const [rewrittenText, setRewrittenText] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  // Browsers/proxies collapse "https://" to "https:/" in paths; restore it.
+  let target = jobUrl.map(decodeURIComponent).join("/").replace(/^(https?):\/*/i, "$1://");
+  if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
+  if (qs.size) target += `?${qs}`;
 
-  useEffect(() => {
-    if (pathname) {
-      const fullJobUrl = pathname.slice(1); // Remove the leading '/'
-      console.log("fullJobUrl", fullJobUrl);
-      setJobUrl(fullJobUrl);
-    }
-  }, [pathname]);
-
-  useEffect(() => {
-    if (jobUrl) {
-      fetchJobDescription(jobUrl);
-    }
-  }, [jobUrl]);
-
-  const fetchJobDescription = async (jobUrl: string) => {
-    setLoading(true);
-    try {
-      // Call the API route to fetch and rewrite the job description
-      const response = await axios.get(`/api/job?jobUrl=${encodeURIComponent(jobUrl)}`);
-      const { rewrittenText, error } = response.data;
-
-      if (error) {
-        setError(error);
-      } else {
-        setRewrittenText(rewrittenText);
-      }
-    } catch (error: any) {
-      setError(error.message);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Rewrite Resume</h1>
-      {loading && <p>Loading...</p>}
-      {error && <p className="text-red-500">{error}</p>}
-      {rewrittenText && <pre className="whitespace-pre-wrap">{rewrittenText}</pre>}
-    </div>
-  );
+  try {
+    const u = new URL(target);
+    if (!u.hostname.includes(".")) notFound();
+  } catch {
+    notFound();
+  }
+  redirect(`/?url=${encodeURIComponent(target)}`);
 }
