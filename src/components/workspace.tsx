@@ -171,6 +171,18 @@ export function Workspace({
     setShowDiff(true);
   }
 
+  // The browser's "Save as PDF" uses document.title as the file name.
+  function downloadPdf() {
+    const who = base?.name.trim() || user.name || "Resume";
+    const kind = tab === "cover" ? "Cover Letter" : "Resume";
+    const target = job ? job.company || job.title : "";
+    const name = (target ? `${who} - ${kind} for ${target}` : `${who} - ${kind}`).replace(/[\\/:*?"<>|]+/g, "-");
+    const prev = document.title;
+    document.title = name;
+    window.addEventListener("afterprint", () => (document.title = prev), { once: true });
+    window.print();
+  }
+
   function startEditing() {
     if (!job?.tailored) return setBaseDrawer(true);
     setTab("resume");
@@ -497,7 +509,7 @@ export function Workspace({
               )}
               {!editing && (
                 <button
-                  onClick={() => window.print()}
+                  onClick={downloadPdf}
                   disabled={!model || (tab === "cover" && !cover)}
                   className={`${btnDark} disabled:opacity-50`}
                 >
