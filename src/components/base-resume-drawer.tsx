@@ -22,6 +22,46 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const ghost =
   "bg-white border border-line-2 text-ink px-3.5 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer hover:bg-canvas disabled:opacity-60";
 
+function move<T>(list: T[], from: number, to: number) {
+  const [item] = list.splice(from, 1);
+  list.splice(to, 0, item);
+}
+
+function MoveButtons({
+  noun,
+  index,
+  count,
+  onMove,
+}: {
+  noun: string;
+  index: number;
+  count: number;
+  onMove: (to: number) => void;
+}) {
+  return (
+    <div className="flex gap-1">
+      {(
+        [
+          ["↑", `Move ${noun} up`, index - 1],
+          ["↓", `Move ${noun} down`, index + 1],
+        ] as const
+      ).map(([glyph, label, to]) => (
+        <button
+          key={glyph}
+          type="button"
+          title={label}
+          aria-label={label}
+          disabled={to < 0 || to >= count}
+          onClick={() => onMove(to)}
+          className="w-7 h-7 grid place-items-center bg-white border border-line-2 rounded-md text-[13px] text-subtle cursor-pointer hover:bg-canvas hover:text-ink disabled:opacity-35 disabled:cursor-default"
+        >
+          {glyph}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function BaseResumeDrawer({ initial, onClose }: { initial: Resume | null; onClose: () => void }) {
   const router = useRouter();
   const isNew = !initial;
@@ -184,30 +224,12 @@ export function BaseResumeDrawer({ initial, onClose }: { initial: Resume | null;
                   onChange={(e) => update((d) => void (d.sections[si].title = e.target.value))}
                   className="font-extrabold text-[12px] tracking-[.08em] uppercase border-0 py-1 text-ink bg-transparent outline-none flex-1"
                 />
-                <div className="flex gap-1">
-                  {(
-                    [
-                      ["↑", "Move section up", si - 1],
-                      ["↓", "Move section down", si + 1],
-                    ] as const
-                  ).map(([glyph, label, to]) => (
-                    <button
-                      key={glyph}
-                      title={label}
-                      aria-label={label}
-                      disabled={to < 0 || to >= r.sections.length}
-                      onClick={() =>
-                        update((d) => {
-                          const [moved] = d.sections.splice(si, 1);
-                          d.sections.splice(to, 0, moved);
-                        })
-                      }
-                      className="w-7 h-7 grid place-items-center bg-white border border-line-2 rounded-md text-[13px] text-subtle cursor-pointer hover:bg-canvas hover:text-ink disabled:opacity-35 disabled:cursor-default"
-                    >
-                      {glyph}
-                    </button>
-                  ))}
-                </div>
+                <MoveButtons
+                  noun="section"
+                  index={si}
+                  count={r.sections.length}
+                  onMove={(to) => update((d) => move(d.sections, si, to))}
+                />
                 <button
                   onClick={() => update((d) => void d.sections.splice(si, 1))}
                   className="bg-transparent border-0 text-faint text-[12px] font-semibold cursor-pointer hover:text-bad"
@@ -220,7 +242,7 @@ export function BaseResumeDrawer({ initial, onClose }: { initial: Resume | null;
                   key={ei}
                   className="flex flex-col gap-2 border-t border-line pt-3 first-of-type:border-0 first-of-type:pt-0"
                 >
-                  <div className="grid grid-cols-[1fr_1fr_220px_auto] gap-2 items-end">
+                  <div className="grid grid-cols-[1fr_1fr_220px_auto_auto] gap-2 items-end">
                     <Field label="Role / degree">
                       <input
                         value={e.role}
@@ -245,6 +267,14 @@ export function BaseResumeDrawer({ initial, onClose }: { initial: Resume | null;
                         className={small}
                       />
                     </Field>
+                    <div className="pb-0.5">
+                      <MoveButtons
+                        noun="entry"
+                        index={ei}
+                        count={s.entries.length}
+                        onMove={(to) => update((d) => move(d.sections[si].entries, ei, to))}
+                      />
+                    </div>
                     <button
                       onClick={() => update((d) => void d.sections[si].entries.splice(ei, 1))}
                       className="bg-transparent border-0 text-faint text-[16px] cursor-pointer hover:text-bad pb-1.5"
