@@ -1,0 +1,1 @@
+ALTER TABLE "job" ADD COLUMN "pasted" boolean DEFAULT false NOT NULL;

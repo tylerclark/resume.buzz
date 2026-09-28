@@ -130,7 +130,11 @@ function TabChip({
   const isNew = id === NEW_TAB;
   const busy = isBusy(status);
   const failed = !isNew && status?.stage === "failed";
-  const label = isNew ? "New job" : status ? status.title || hostOf(status.url) || "Loading…" : "Loading…";
+  const label = isNew
+    ? "New job"
+    : status
+      ? status.title || hostOf(status.url) || (busy ? "Loading…" : "Pasted posting")
+      : "Loading…";
   const detail = isNew
     ? ""
     : !status

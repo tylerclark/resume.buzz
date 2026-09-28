@@ -81,6 +81,7 @@ export function Workspace({
   const [prompt, setPrompt] = useState(initialJob?.prompt ?? DEFAULT_PROMPT);
   const [rawOpen, setRawOpen] = useState(false);
   const [baseDrawer, setBaseDrawer] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [draft, setDraft] = useState<StoredTailored | null>(null); // non-null = editing the tailored resume
   const [savingDraft, setSavingDraft] = useState(false);
   const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "delete" | null>(null);
@@ -163,24 +164,31 @@ export function Workspace({
     [job?.tailored, job?.baseHash, base],
   );
 
-  async function start(target: string) {
+  // A URL to scrape, or a pasted description (LinkedIn etc. block crawlers) with an optional URL.
+  // Resolves true once the job exists and we're navigating to it; the message is thrown otherwise.
+  async function start(source: { url?: string; description?: string }) {
     setError(null);
     setStarting(true);
     try {
       const res = await fetch("/api/tailor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: target }),
+        body: JSON.stringify(source),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
       // The "new job" tab becomes this job's tab; the pipeline keeps going on the server.
       tabs.replace(NEW_TAB, body.id);
       router.replace(`/j/${body.id}`);
+      return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
       setStarting(false);
+      throw err;
     }
+  }
+
+  function startUrl(target: string) {
+    start({ url: target }).catch((err) => setError(err instanceof Error ? err.message : "Something went wrong."));
   }
 
   const started = useRef(false);
@@ -188,7 +196,7 @@ export function Workspace({
     if (autoUrl && base && !started.current) {
       started.current = true;
       setUrl(autoUrl);
-      start(autoUrl);
+      startUrl(autoUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -359,15 +367,24 @@ export function Workspace({
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noreferrer"
-                className="block font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate text-ink hover:text-brand"
-                title={job.title || job.url}
-              >
-                {job.title || hostOf(job.url)}
-              </a>
+              {job.url ? (
+                <a
+                  href={job.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate text-ink hover:text-brand"
+                  title={job.title || job.url}
+                >
+                  {job.title || hostOf(job.url)}
+                </a>
+              ) : (
+                <div
+                  className="font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate text-ink"
+                  title={job.title || "Pasted posting"}
+                >
+                  {job.title || "Pasted posting"}
+                </div>
+              )}
               <div className={`text-[12px] truncate ${inFlight ? "text-brand" : failed ? "text-bad" : "text-muted"}`}>
                 {inFlight
                   ? `${JOB_STAGES[job.stage].label}…`
@@ -408,37 +425,64 @@ export function Workspace({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (url.trim()) start(url.trim());
+                  if (url.trim()) startUrl(url.trim());
                 }}
                 className="flex flex-col gap-2"
               >
                 <label className="eyebrow" htmlFor="job-url">
                   Job URL
                 </label>
-                <input
-                  id="job-url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  disabled={starting || !base}
-                  placeholder="https://jobs.example.com/senior-product-designer"
-                  className="w-full box-border border border-line-2 rounded-[10px] text-[14px] px-3 py-[11px] bg-white text-ink disabled:opacity-60"
-                />
-                <button
-                  type="submit"
-                  disabled={starting || !base || !url.trim()}
-                  className="bg-brand hover:bg-brand-hover text-white border-0 rounded-[10px] px-4 h-[42px] text-[14px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default"
-                >
-                  {starting ? "Starting…" : "Tailor resume →"}
-                </button>
+                <div className="relative">
+                  <input
+                    id="job-url"
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    disabled={starting || !base}
+                    placeholder="https://jobs.example.com/senior-product-designer"
+                    className="w-full box-border border border-line-2 rounded-[10px] text-[14px] pl-3 pr-[46px] py-[11px] bg-white text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={starting || !base || !url.trim()}
+                    title="Tailor resume"
+                    aria-label="Tailor resume"
+                    className="absolute right-[6px] top-1/2 -translate-y-1/2 w-[32px] h-[32px] grid place-items-center bg-brand hover:bg-brand-hover text-white border-0 rounded-[8px] cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                  >
+                    {starting && !pasteOpen ? (
+                      <Spinner className="w-4 h-4 border-white border-t-transparent" />
+                    ) : (
+                      <ArrowIcon className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                {error && !pasteOpen && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
                 <div className="text-[12px] text-subtle leading-[1.6]">
                   Or prefix any posting:{" "}
                   <code className="font-mono bg-chip text-ink px-1.5 py-0.5 rounded-[5px] text-[11.5px]">
                     resume.buzz/<span className="text-brand">https://…</span>
                   </code>
-                  <br />
-                  Scraped with Firecrawl.
                 </div>
-                {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
+                <div className="flex items-center gap-3 my-1 text-[11px] font-bold uppercase tracking-[.08em] text-faint">
+                  <span className="flex-1 h-px bg-line-2" />
+                  or
+                  <span className="flex-1 h-px bg-line-2" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setPasteOpen(true);
+                  }}
+                  disabled={starting || !base}
+                  className={`${btnGhost} flex items-center justify-center gap-2 py-[11px] text-[13.5px] disabled:opacity-60 disabled:cursor-default`}
+                >
+                  <ClipboardIcon className="w-4 h-4 text-subtle" />
+                  Paste the job description
+                </button>
+                <div className="text-[12px] text-subtle leading-[1.6]">
+                  For LinkedIn and other sites that block crawlers: copy the posting text and paste it in.
+                </div>
               </form>
 
               {history.length > 0 && (
@@ -457,6 +501,7 @@ export function Workspace({
           {job && building && (
             <ProgressCard
               url={job.url}
+              pasted={job.pasted}
               stage={job.stage}
               onCancel={discard}
               cancelling={busyAction === "delete"}
@@ -474,7 +519,9 @@ export function Workspace({
                   <div className="text-[12.5px] text-muted leading-[1.5] mt-0.5 break-words">
                     {job.error || "Something went wrong."}
                   </div>
-                  {!hasResume && <div className="text-[12px] text-subtle break-all mt-1.5">{job.url}</div>}
+                  {!hasResume && (
+                    <div className="text-[12px] text-subtle break-all mt-1.5">{job.url || "Pasted description"}</div>
+                  )}
                 </div>
               </div>
               {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
@@ -819,6 +866,9 @@ export function Workspace({
         </section>
 
       {baseDrawer && <BaseResumeDrawer initial={base} facts={facts} onClose={() => setBaseDrawer(false)} />}
+      {pasteOpen && (
+        <PasteJobModal initialUrl={url} onStart={start} onClose={() => !starting && setPasteOpen(false)} />
+      )}
     </div>
   );
 }
@@ -883,22 +933,29 @@ function ResumeSkeleton({ name, contact }: { name?: string; contact?: string }) 
 
 function ProgressCard({
   url,
+  pasted,
   stage,
   onCancel,
   cancelling,
 }: {
   url: string;
+  pasted: boolean;
   stage: JobStage;
   onCancel: () => void;
   cancelling: boolean;
 }) {
-  const current = PIPELINE_STEPS.indexOf(stage as (typeof PIPELINE_STEPS)[number]);
-  const progress = stage === "done" ? 1 : Math.max(0, current) / PIPELINE_STEPS.length;
+  // Pasted jobs have nothing to fetch.
+  const steps: readonly JobStage[] = pasted ? PIPELINE_STEPS.filter((s) => s !== "scraping") : PIPELINE_STEPS;
+  const current = steps.indexOf(stage);
+  const progress = stage === "done" ? 1 : Math.max(0, current) / steps.length;
   return (
     <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex flex-col gap-3.5">
-      <div className="text-[12px] text-subtle break-all">{url}</div>
+      <div className="text-[12px] text-subtle break-all">
+        {pasted && <span className="text-faint">Pasted description{url ? " · " : ""}</span>}
+        {url}
+      </div>
       <ol className="list-none m-0 p-0 flex flex-col gap-3">
-        {PIPELINE_STEPS.map((st, i) => {
+        {steps.map((st, i) => {
           const done = stage === "done" || i < current,
             active = i === current;
           return (
@@ -964,7 +1021,7 @@ function JobRow({
   const live = useJobStatus(stageInFlight(h.stage) ? h.id : null) ?? h;
   const working = stageInFlight(live.stage);
   const failed = live.stage === "failed";
-  const title = live.title || h.title || hostOf(h.url);
+  const title = live.title || h.title || hostOf(h.url) || "Pasted posting";
   return (
     <div
       className={`flex items-center gap-2.5 p-2 rounded-[10px] ${current ? "bg-brand-tint" : "hover:bg-canvas"} ${
@@ -1299,6 +1356,169 @@ function JobPanel({
           </div>
         )}
       </section>
+    </>
+  );
+}
+
+function ArrowIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`block ${className}`}
+    >
+      <path d="M3 8h10M9 4l4 4-4 4" />
+    </svg>
+  );
+}
+
+function ClipboardIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`block ${className}`}
+    >
+      <rect x="3" y="3" width="10" height="11.5" rx="1.8" />
+      <path d="M6 3V2.2A1 1 0 0 1 7 1.2h2a1 1 0 0 1 1 1V3M5.5 7.5h5M5.5 10.5h3.5" />
+    </svg>
+  );
+}
+
+// Large paste-in dialog for postings we can't crawl (LinkedIn and friends). The URL is optional and only
+// kept as the link back to the posting.
+function PasteJobModal({
+  initialUrl,
+  onStart,
+  onClose,
+}: {
+  initialUrl: string;
+  onStart: (source: { url?: string; description: string }) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState(initialUrl);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const chars = text.trim().length;
+  const ready = chars >= 200 && !busy;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
+  async function submit() {
+    if (!ready) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onStart({ url: url.trim() || undefined, description: text.trim() });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div onClick={() => !busy && onClose()} className="fixed inset-0 z-30 bg-[rgba(15,27,61,.45)]" />
+      <div
+        role="dialog"
+        aria-modal
+        aria-label="Paste a job description"
+        className="fixed z-30 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] max-w-[94vw] h-[84vh] max-h-[860px] bg-white rounded-[16px] shadow-[0_24px_64px_rgba(15,27,61,.28)] flex flex-col overflow-hidden"
+      >
+        <header className="flex items-start gap-4 px-6 pt-5 pb-4 border-b border-line flex-none">
+          <div className="min-w-0 flex-1">
+            <div className="font-extrabold text-[16px] tracking-[-.01em]">Paste the job description</div>
+            <div className="text-[12.5px] text-subtle mt-0.5">
+              Copy everything from the posting: title, company, responsibilities, requirements. More is better.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close"
+            className="bg-transparent border-0 text-[22px] leading-none cursor-pointer text-subtle px-1 disabled:opacity-40"
+          >
+            ×
+          </button>
+        </header>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="flex-1 min-h-0 flex flex-col gap-3 px-6 py-4"
+        >
+          <div className="flex flex-col gap-1.5 flex-none">
+            <label className="eyebrow" htmlFor="paste-url">
+              Posting URL <span className="normal-case tracking-normal font-semibold text-faint">(optional)</span>
+            </label>
+            <input
+              id="paste-url"
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={busy}
+              placeholder="https://www.linkedin.com/jobs/view/…"
+              className="w-full box-border border border-line-2 rounded-[10px] text-[13.5px] px-3 py-[9px] bg-white text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
+            />
+          </div>
+          <div className="flex-1 min-h-0 flex flex-col gap-1.5">
+            <label className="eyebrow" htmlFor="paste-text">
+              Job description
+            </label>
+            <textarea
+              id="paste-text"
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit();
+              }}
+              disabled={busy}
+              placeholder={"Senior Product Designer\nAcme Inc · San Francisco, CA (Hybrid)\n\nAbout the role…"}
+              className="flex-1 min-h-0 w-full box-border resize-none border border-line-2 rounded-[10px] text-[13.5px] leading-[1.55] px-3.5 py-3 bg-field text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-3 flex-none pt-1">
+            <div className="text-[12px] text-faint min-w-0 flex-1">
+              {error ? (
+                <span className="text-bad">{error}</span>
+              ) : chars === 0 ? (
+                "Nothing pasted yet."
+              ) : chars < 200 ? (
+                `Paste a bit more — that's only ${chars} characters.`
+              ) : (
+                `${chars.toLocaleString()} characters · ⌘↵ to start`
+              )}
+            </div>
+            <button type="button" onClick={onClose} disabled={busy} className={btnGhost}>
+              Cancel
+            </button>
+            <button type="submit" disabled={!ready} className={`${btnPrimary} h-[38px] px-4 disabled:cursor-default`}>
+              {busy ? "Starting…" : "Tailor resume →"}
+            </button>
+          </div>
+        </form>
+      </div>
     </>
   );
 }

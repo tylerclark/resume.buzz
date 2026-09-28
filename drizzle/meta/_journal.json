@@ -43,6 +43,13 @@
       "when": 1790621735983,
       "tag": "0005_daffy_korg",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790624779669,
+      "tag": "0006_flaky_falcon",
+      "breakpoints": true
     }
   ]
 }

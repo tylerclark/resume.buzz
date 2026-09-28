@@ -53,18 +53,27 @@ async function run(id: string, userId: string, from: JobStage) {
 
     let description = row.raw;
 
+    // Two ways in: a URL we scrape, or text the user pasted (LinkedIn etc. can't be crawled). Pasted jobs
+    // are created with `raw` filled in and start at "extracting".
     if (startAt <= order.indexOf("extracting")) {
-      await advance(id, userId, "scraping");
-      const markdown = await scrapePosting(row.url);
+      let page = row.raw;
+      if (startAt <= order.indexOf("scraping") && !row.pasted) {
+        if (!row.url) throw new Error("This job has no URL and no pasted description.");
+        await advance(id, userId, "scraping");
+        page = await scrapePosting(row.url);
+      }
       await advance(id, userId, "extracting");
-      const details = await extractJob(row.url, markdown);
+      const details = await extractJob(row.url, page);
       // Don't score/tailor against an empty page (e.g. a JS app that never finished loading).
       if (!details.title.trim() || details.description.trim().length < 200) {
         throw new Error(
-          "Couldn't find a job posting on that page — it may need a login or didn't finish loading. Try the company's direct careers link.",
+          !row.pasted
+            ? "Couldn't find a job posting on that page — it may need a login or didn't finish loading. Try the company's direct careers link, or paste the description instead."
+            : "Couldn't find a job posting in that text. Paste the full description, including the title.",
         );
       }
-      description = details.description;
+      // Pasted text is already the posting; for scraped pages keep Claude's chrome-free version.
+      description = row.pasted ? row.raw : details.description;
       await advance(id, userId, "scoring", {
         title: details.title,
         company: details.company,
@@ -110,11 +119,15 @@ async function run(id: string, userId: string, from: JobStage) {
   }
 }
 
-// Create the row and schedule the full pipeline. Returns immediately with the new id.
-export async function startJob(userId: string, url: string, prompt: string) {
+// Create the row and schedule the full pipeline. Returns immediately with the new id. Either a URL to
+// scrape or a pasted description (with an optional URL kept only as the link back to the posting).
+export async function startJob(userId: string, source: { url: string; description?: string }, prompt: string) {
   const id = crypto.randomUUID();
-  await db.insert(job).values({ id, userId, url, title: "", company: "", raw: "", prompt, stage: "queued" });
-  after(() => run(id, userId, "scraping"));
+  const raw = source.description?.trim() ?? "";
+  await db
+    .insert(job)
+    .values({ id, userId, url: source.url, pasted: !!raw, title: "", company: "", raw, prompt, stage: "queued" });
+  after(() => run(id, userId, raw ? "extracting" : "scraping"));
   return id;
 }
 
@@ -126,7 +139,16 @@ export async function retailorJob(row: Job, prompt: string) {
 
 // Resume a failed job from the last step that didn't finish.
 export async function retryJob(row: Job) {
-  const from: JobStage = !row.raw ? "scraping" : row.tailored ? "tailoring" : !row.scoreNote ? "scoring" : "tailoring";
+  // A pasted job has `raw` from the start; `title` only lands once extraction succeeds.
+  const from: JobStage = !row.raw
+    ? "scraping"
+    : row.pasted && !row.title
+      ? "extracting"
+    : row.tailored
+        ? "tailoring"
+        : !row.scoreNote
+          ? "scoring"
+          : "tailoring";
   await advance(row.id, row.userId, "queued", { error: null });
   after(() => run(row.id, row.userId, from));
 }

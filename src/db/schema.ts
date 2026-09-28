@@ -83,7 +83,10 @@ export const job = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    // Empty for postings the user pasted in without a link.
     url: text("url").notNull(),
+    // The description was pasted in rather than scraped (LinkedIn etc. block crawlers); `url` is then only a link.
+    pasted: boolean("pasted").notNull().default(false),
     title: text("title").notNull(),
     company: text("company").notNull(),
     location: text("location").notNull().default(""),

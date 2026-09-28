@@ -74,7 +74,7 @@ export function extractJob(url: string, markdown: string) {
   return structured(
     JobDetailsSchema,
     "You extract structured job-posting details from scraped web pages. Use only what the page says; leave fields empty when unknown.",
-    `Posting URL: ${url}\n\n<page>\n${markdown}\n</page>`,
+    `${url ? `Posting URL: ${url}` : "Source: text the candidate pasted from the posting"}\n\n<page>\n${markdown}\n</page>`,
     "low",
   );
 }
