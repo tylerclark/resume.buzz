@@ -400,15 +400,6 @@ export function Workspace({
         <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-[60px] flex flex-col gap-[22px]">
           {!hasJob && (
             <>
-              <div className="flex flex-col gap-1.5">
-                <h1 className="m-0 text-[22px] leading-[1.2] font-extrabold tracking-[-.02em] text-pretty">
-                  Paste a job. Get a resume built for it.
-                </h1>
-                <p className="m-0 text-[13px] leading-normal text-muted text-pretty">
-                  We read the posting, make small honest edits to your base resume, and show exactly what changed.
-                  Each job opens in its own tab, so you can start the next one while this one works.
-                </p>
-              </div>
 
               {!base && (
                 <div className="bg-white border border-dashed border-[#b9c6de] rounded-[14px] px-[18px] py-4 flex flex-col gap-2">
@@ -457,31 +448,26 @@ export function Workspace({
                   </button>
                 </div>
                 {error && !pasteOpen && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
-                <div className="text-[12px] text-subtle leading-[1.6]">
-                  Or prefix any posting:{" "}
-                  <code className="font-mono bg-chip text-ink px-1.5 py-0.5 rounded-[5px] text-[11.5px]">
-                    resume.buzz/<span className="text-brand">https://…</span>
-                  </code>
-                </div>
-                <div className="flex items-center gap-3 my-1 text-[11px] font-bold uppercase tracking-[.08em] text-faint">
-                  <span className="flex-1 h-px bg-line-2" />
-                  or
-                  <span className="flex-1 h-px bg-line-2" />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    setPasteOpen(true);
-                  }}
-                  disabled={starting || !base}
-                  className={`${btnGhost} flex items-center justify-center gap-2 py-[11px] text-[13.5px] disabled:opacity-60 disabled:cursor-default`}
-                >
-                  <ClipboardIcon className="w-4 h-4 text-subtle" />
-                  Paste the job description
-                </button>
-                <div className="text-[12px] text-subtle leading-[1.6]">
-                  For LinkedIn and other sites that block crawlers: copy the posting text and paste it in.
+                <div className="flex items-center gap-3 text-[12px] text-subtle leading-[1.6]">
+                  <span className="min-w-0 truncate">
+                    Or prefix any posting:{" "}
+                    <code className="font-mono bg-chip text-ink px-1.5 py-0.5 rounded-[5px] text-[11.5px]">
+                      resume.buzz/<span className="text-brand">https://…</span>
+                    </code>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      setPasteOpen(true);
+                    }}
+                    disabled={starting || !base}
+                    title="For LinkedIn and other sites that block crawlers"
+                    className="ml-auto flex-none inline-flex items-center gap-1.5 bg-transparent border-0 p-0 text-[12px] font-semibold text-brand cursor-pointer hover:underline disabled:opacity-60 disabled:cursor-default disabled:no-underline"
+                  >
+                    <ClipboardIcon className="w-3.5 h-3.5" />
+                    Paste a job
+                  </button>
                 </div>
               </form>
 
