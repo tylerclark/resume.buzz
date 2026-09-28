@@ -178,7 +178,6 @@ export function Workspace({
         <Link href="/" className="hover:no-underline">
           <Logo height={26} priority />
         </Link>
-        {!hasJob && <span className="text-[13px] text-subtle font-semibold">New tailored resume</span>}
         <div className="ml-auto flex gap-2 items-center">
           {hasJob && (
             <>
