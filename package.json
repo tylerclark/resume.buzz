@@ -2,6 +2,21 @@
   "name": "resume-buzz",
   "version": "0.1.0",
   "private": true,
+  "description": "Paste a job posting. Get your resume tailored to it, with a word-level diff and a cover letter.",
+  "license": "MIT",
+  "author": "Tyler Clark",
+  "homepage": "https://resume.buzz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tylerclark/resume.buzz.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tylerclark/resume.buzz/issues"
+  },
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +26,12 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "check": "pnpm lint && pnpm typecheck",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "commit-msg": "pnpm exec commitlint --edit \"$1\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -29,6 +49,8 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "@tailwindcss/postcss": "^4",
     "@types/diff": "^8.0.0",
     "@types/node": "^20",
@@ -38,6 +60,7 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "simple-git-hooks": "^2.14.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
