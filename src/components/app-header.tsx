@@ -108,9 +108,9 @@ function TabBar() {
         onClick={openNew}
         title="New job"
         aria-label="New job"
-        className="flex-none w-8 h-8 grid place-items-center rounded-lg border-0 bg-transparent text-subtle text-[20px] leading-none cursor-pointer hover:bg-canvas hover:text-ink"
+        className="flex-none w-8 h-8 grid place-items-center rounded-lg border-0 bg-transparent text-subtle cursor-pointer hover:bg-canvas hover:text-ink"
       >
-        +
+        <PlusIcon className="w-4 h-4" />
       </button>
     </div>
   );
@@ -147,7 +147,7 @@ function TabChip({
     <div
       role="tab"
       aria-selected={active}
-      className={`group relative flex items-center gap-2 h-9 pl-2.5 pr-1.5 rounded-[9px] border max-w-[220px] min-w-[120px] flex-none transition-colors ${
+      className={`relative flex items-center gap-2 h-9 pl-2.5 pr-1.5 rounded-[9px] border max-w-[220px] min-w-[120px] flex-none transition-colors ${
         active
           ? "bg-canvas border-line-2 text-ink"
           : "bg-white border-transparent text-subtle hover:bg-canvas hover:text-ink"
@@ -179,7 +179,7 @@ function TabChip({
         </span>
       </Link>
       {!isNew && status && !busy && !failed && (
-        <span className="flex-none text-[10.5px] font-bold text-ok-ink bg-ok-bg px-1.5 py-px rounded-full group-hover:hidden">
+        <span className="flex-none text-[10.5px] font-bold text-ok-ink bg-ok-bg px-1.5 py-px rounded-full leading-4">
           {shownScore(status)}%
         </span>
       )}
@@ -192,11 +192,9 @@ function TabChip({
         }}
         title={busy ? "Close tab (keeps working in the background)" : "Close tab"}
         aria-label={`Close ${label}`}
-        className={`flex-none w-5 h-5 grid place-items-center rounded-md border-0 bg-transparent text-faint text-[15px] leading-none cursor-pointer hover:bg-line-2 hover:text-ink ${
-          !isNew && status && !busy && !failed ? "hidden group-hover:grid" : ""
-        }`}
+        className="flex-none w-5 h-5 grid place-items-center rounded-md border-0 bg-transparent text-faint cursor-pointer hover:bg-line-2 hover:text-ink"
       >
-        ×
+        <CloseIcon className="w-3 h-3" />
       </button>
     </div>
   );
@@ -215,21 +213,37 @@ function TabIcon({
 }) {
   if (isNew)
     return (
-      <span className="flex-none w-[18px] h-[18px] rounded-[5px] border border-dashed border-line-3 grid place-items-center text-[12px] text-faint">
-        +
+      <span className="flex-none w-[18px] h-[18px] rounded-[5px] border border-dashed border-line-3 grid place-items-center text-faint">
+        <PlusIcon className="w-2.5 h-2.5" />
       </span>
     );
   if (busy) return <Spinner />;
   if (failed)
     return (
-      <span className="flex-none w-[18px] h-[18px] rounded-[5px] bg-bad-bg text-bad grid place-items-center text-[11px] font-extrabold">
+      <span className="flex-none w-[18px] h-[18px] rounded-[5px] bg-bad-bg text-bad grid place-items-center text-[11px] leading-none font-extrabold">
         !
       </span>
     );
   return (
-    <span className="flex-none w-[18px] h-[18px] rounded-[5px] bg-ink text-white grid place-items-center text-[10.5px] font-extrabold">
+    <span className="flex-none w-[18px] h-[18px] rounded-[5px] bg-ink text-white grid place-items-center text-[10.5px] leading-none font-extrabold">
       {(status?.company || status?.title || "?")[0]?.toUpperCase()}
     </span>
+  );
+}
+
+function PlusIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`block ${className}`}>
+      <path d="M8 3v10M3 8h10" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`block ${className}`}>
+      <path d="M4 4l8 8M12 4l-8 8" />
+    </svg>
   );
 }
 
