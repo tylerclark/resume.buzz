@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EMPTY_RESUME, type Entry, type Resume } from "@/lib/types";
+import { AutoTextarea } from "./auto-textarea";
 
 const card = "bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5";
 const field =
@@ -18,23 +19,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// Grows to fit its content so long entries never need an inner scrollbar.
-function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight + 2}px`;
-    };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [props.value]);
-  return <textarea ref={ref} rows={2} {...props} />;
-}
 const ghost =
   "bg-white border border-line-2 text-ink px-3.5 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer hover:bg-canvas disabled:opacity-60";
 
@@ -200,6 +184,30 @@ export function BaseResumeDrawer({ initial, onClose }: { initial: Resume | null;
                   onChange={(e) => update((d) => void (d.sections[si].title = e.target.value))}
                   className="font-extrabold text-[12px] tracking-[.08em] uppercase border-0 py-1 text-ink bg-transparent outline-none flex-1"
                 />
+                <div className="flex gap-1">
+                  {(
+                    [
+                      ["↑", "Move section up", si - 1],
+                      ["↓", "Move section down", si + 1],
+                    ] as const
+                  ).map(([glyph, label, to]) => (
+                    <button
+                      key={glyph}
+                      title={label}
+                      aria-label={label}
+                      disabled={to < 0 || to >= r.sections.length}
+                      onClick={() =>
+                        update((d) => {
+                          const [moved] = d.sections.splice(si, 1);
+                          d.sections.splice(to, 0, moved);
+                        })
+                      }
+                      className="w-7 h-7 grid place-items-center bg-white border border-line-2 rounded-md text-[13px] text-subtle cursor-pointer hover:bg-canvas hover:text-ink disabled:opacity-35 disabled:cursor-default"
+                    >
+                      {glyph}
+                    </button>
+                  ))}
+                </div>
                 <button
                   onClick={() => update((d) => void d.sections.splice(si, 1))}
                   className="bg-transparent border-0 text-faint text-[12px] font-semibold cursor-pointer hover:text-bad"

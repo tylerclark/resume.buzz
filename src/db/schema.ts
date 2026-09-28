@@ -1,5 +1,5 @@
 import { boolean, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { JobRequirement, Resume, TailoredResume } from "@/lib/types";
+import type { JobRequirement, Resume, StoredTailored } from "@/lib/types";
 
 // ---------- BetterAuth tables ----------
 
@@ -96,7 +96,7 @@ export const job = pgTable(
     keywordsMissing: jsonb("keywords_missing").$type<string[]>().notNull().default([]),
     raw: text("raw").notNull(),
     prompt: text("prompt").notNull(),
-    tailored: jsonb("tailored").$type<TailoredResume>(),
+    tailored: jsonb("tailored").$type<StoredTailored>(),
     coverPrompt: text("cover_prompt").notNull().default(""),
     coverLetter: jsonb("cover_letter").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

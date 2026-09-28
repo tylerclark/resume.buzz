@@ -33,6 +33,12 @@ export async function POST(request: Request) {
         const markdown = await scrapePosting(url);
         send({ step: 1 });
         const details = await extractJob(url, markdown);
+        // Don't score/tailor against an empty page (e.g. a JS app that never finished loading).
+        if (!details.title.trim() || details.description.trim().length < 200) {
+          throw new Error(
+            "Couldn't find a job posting on that page — it may need a login or didn't finish loading. Try the company's direct careers link.",
+          );
+        }
         send({ step: 2 });
         const score = await scoreJob(base, details.description);
         send({ step: 3 });

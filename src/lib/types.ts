@@ -43,6 +43,40 @@ export const TailoredResumeSchema = z.object({
 export type TailoredLine = z.infer<typeof TailoredLineSchema>;
 export type TailoredResume = z.infer<typeof TailoredResumeSchema>;
 
+// What we store per job: the model's output plus the user's own edits on top.
+// `edited` (when present) is the user's final text for that line; `text` stays the AI version.
+export const StoredLineSchema = TailoredLineSchema.extend({ edited: z.string().optional() });
+export const StoredTailoredSchema = TailoredResumeSchema.extend({
+  headline: StoredLineSchema,
+  sections: z.array(
+    z.object({
+      title: z.string(),
+      entries: z.array(
+        z.object({ role: z.string(), org: z.string(), dates: z.string(), bullets: z.array(StoredLineSchema) }),
+      ),
+    }),
+  ),
+});
+export type StoredLine = z.infer<typeof StoredLineSchema>;
+export type StoredTailored = z.infer<typeof StoredTailoredSchema>;
+
+export const finalText = (l: StoredLine) => l.edited ?? l.text;
+
+export const hasUserEdits = (t: StoredTailored) =>
+  t.headline.edited !== undefined ||
+  t.sections.some((s) => s.entries.some((e) => e.bullets.some((b) => b.edited !== undefined)));
+
+// The resume as it will actually be sent out (for cover letters, etc.).
+export function finalResume(t: StoredTailored) {
+  return {
+    headline: finalText(t.headline),
+    sections: t.sections.map((s) => ({
+      title: s.title,
+      entries: s.entries.map((e) => ({ ...e, bullets: e.bullets.map(finalText).filter(Boolean) })),
+    })),
+  };
+}
+
 export const JobRequirementSchema = z.object({
   status: z.enum(["hit", "partial", "miss"]),
   text: z.string(),

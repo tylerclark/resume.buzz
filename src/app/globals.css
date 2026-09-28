@@ -31,6 +31,9 @@
   --color-bad: #b23b3b;
   --color-bad-bg: #fde8e8;
   --color-bad-mark: #fde0e0;
+  --color-user-mark: #e7defc;
+  --color-user-del: #f1ebfd;
+  --color-user-ink: #6b3fb5;
 
   --animate-pulse-soft: rbpulse 1.2s infinite;
 }

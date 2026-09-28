@@ -7,10 +7,11 @@ import type { TailorEvent } from "@/app/api/tailor/route";
 import type { Job } from "@/db/schema";
 import { authClient } from "@/lib/auth-client";
 import type { JobSummary } from "@/lib/data";
-import { DEFAULT_PROMPT, type Resume } from "@/lib/types";
+import { DEFAULT_PROMPT, hasUserEdits, type Resume, type StoredTailored } from "@/lib/types";
 import { BaseResumeDrawer } from "./base-resume-drawer";
 import { Logo } from "./logo";
-import { baseModel, countChanges, ResumeDoc, tailoredModel } from "./resume-doc";
+import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
+import { TailoredEditor } from "./tailored-editor";
 
 const STEPS = [
   { label: "Fetching the posting", sub: "Firecrawl renders the page and strips nav, footers and cookie banners" },
@@ -28,6 +29,8 @@ const COVER_CHIPS = [
 
 const TINTS = ["#0f1b3d", "#1a6fe8", "#22b55e"];
 
+// Shared by the left (job) and right (resume) toolbars so they line up.
+const toolbar = "flex items-center min-h-[61px] box-border px-5 py-2.5 bg-white border-b border-line flex-none";
 const btnGhost =
   "bg-white hover:bg-canvas border border-line-2 text-ink px-3 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer whitespace-nowrap";
 const btnPrimary =
@@ -77,6 +80,8 @@ export function Workspace({
   const [regen, setRegen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const [baseDrawer, setBaseDrawer] = useState(false);
+  const [draft, setDraft] = useState<StoredTailored | null>(null); // non-null = editing the tailored resume
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const [coverPrompt, setCoverPrompt] = useState(initialJob?.coverPrompt ?? "");
   const [cover, setCover] = useState<string[] | null>(initialJob?.coverLetter ?? null);
@@ -89,7 +94,8 @@ export function Workspace({
     if (job?.tailored) return tailoredModel(job.tailored);
     return base ? baseModel(base) : null;
   }, [job, base]);
-  const changeCount = job?.tailored && model ? countChanges(model) : 0;
+  const changes = job?.tailored && model ? countChanges(model) : { total: 0, user: 0 };
+  const editing = !!draft;
 
   async function start(target: string) {
     setError(null);
@@ -141,6 +147,8 @@ export function Workspace({
 
   async function regenerate() {
     if (!job || regen) return;
+    if (job.tailored && hasUserEdits(job.tailored) && !confirm("Regenerating replaces your manual edits. Continue?"))
+      return;
     setRegen(true);
     setError(null);
     const res = await fetch(`/api/jobs/${job.id}/tailor`, {
@@ -153,6 +161,30 @@ export function Workspace({
     if (!res.ok) return setError(body.error ?? "Regenerate failed.");
     setJob(body);
     setPromptOpen(false);
+    setShowDiff(true);
+  }
+
+  function startEditing() {
+    if (!job?.tailored) return setBaseDrawer(true);
+    setTab("resume");
+    setPromptOpen(false);
+    setDraft(structuredClone(job.tailored));
+  }
+
+  async function saveDraft() {
+    if (!job || !draft) return;
+    setSavingDraft(true);
+    setError(null);
+    const res = await fetch(`/api/jobs/${job.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tailored: draft }),
+    });
+    const body = await res.json();
+    setSavingDraft(false);
+    if (!res.ok) return setError(body.error ?? "Save failed.");
+    setJob(body);
+    setDraft(null);
     setShowDiff(true);
   }
 
@@ -184,168 +216,181 @@ export function Workspace({
         </Link>
         <div className="ml-auto flex gap-2 items-center">
           {hasJob && (
-            <>
-              <span className="text-[12px] text-faint flex items-center gap-1.5 whitespace-nowrap">
-                <span className="w-[7px] h-[7px] rounded-full bg-ok" />
-                Saved to history
-              </span>
-              <Link href="/" className={`${btnGhost} hover:no-underline`}>
-                + New job
-              </Link>
-            </>
+            <span className="text-[12px] text-faint flex items-center gap-1.5 whitespace-nowrap">
+              <span className="w-[7px] h-[7px] rounded-full bg-ok" />
+              Saved to history
+            </span>
           )}
-          <button onClick={() => setBaseDrawer(true)} className={btnGhost}>
-            Base resume
-          </button>
           <UserMenu user={user} />
         </div>
       </header>
 
       <div className="flex-1 min-h-0 grid grid-cols-[minmax(320px,5fr)_minmax(0,7fr)]">
         {/* LEFT: job summary */}
-        <aside className="overflow-y-auto border-r border-line bg-panel px-6 pt-6 pb-[60px] flex flex-col gap-[22px]">
-          {!hasJob && (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <h1 className="m-0 text-[22px] leading-[1.2] font-extrabold tracking-[-.02em] text-pretty">
-                  Paste a job. Get a resume built for it.
-                </h1>
-                <p className="m-0 text-[13px] leading-normal text-muted text-pretty">
-                  We read the posting, make small honest edits to your base resume, and show exactly what changed.
-                </p>
+        <aside className="flex flex-col min-h-0 border-r border-line bg-panel">
+          {job && (
+            <div className={`${toolbar} gap-2.5`}>
+              <div className="w-8 h-8 rounded-lg bg-ink text-white grid place-items-center font-extrabold text-[14px] flex-none">
+                {job.company[0]?.toUpperCase()}
               </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate" title={job.title}>
+                  {job.title}
+                </div>
+                <div className="text-[12px] text-muted truncate">
+                  {[job.company, job.location].filter(Boolean).join(" · ")}
+                </div>
+              </div>
+              <HistoryMenu history={history} currentId={job.id} />
+              <Link href="/" className={`${btnGhost} hover:no-underline`}>
+                New job
+              </Link>
+            </div>
+          )}
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-[60px] flex flex-col gap-[22px]">
+            {!hasJob && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <h1 className="m-0 text-[22px] leading-[1.2] font-extrabold tracking-[-.02em] text-pretty">
+                    Paste a job. Get a resume built for it.
+                  </h1>
+                  <p className="m-0 text-[13px] leading-normal text-muted text-pretty">
+                    We read the posting, make small honest edits to your base resume, and show exactly what changed.
+                  </p>
+                </div>
 
-              {!base && (
-                <div className="bg-white border border-dashed border-[#b9c6de] rounded-[14px] px-[18px] py-4 flex flex-col gap-2">
-                  <div className="font-bold text-[14px]">Start with your base resume</div>
-                  <div className="text-[12.5px] text-subtle">
-                    Upload a PDF or DOCX once. Every tailored version is built from it.
+                {!base && (
+                  <div className="bg-white border border-dashed border-[#b9c6de] rounded-[14px] px-[18px] py-4 flex flex-col gap-2">
+                    <div className="font-bold text-[14px]">Start with your base resume</div>
+                    <div className="text-[12.5px] text-subtle">
+                      Upload a PDF or DOCX once. Every tailored version is built from it.
+                    </div>
+                    <button onClick={() => setBaseDrawer(true)} className={`${btnDark} self-start`}>
+                      Add base resume →
+                    </button>
                   </div>
-                  <button onClick={() => setBaseDrawer(true)} className={`${btnDark} self-start`}>
-                    Add base resume →
-                  </button>
-                </div>
-              )}
+                )}
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (url.trim()) start(url.trim());
-                }}
-                className="flex flex-col gap-2"
-              >
-                <label className="eyebrow" htmlFor="job-url">
-                  Job URL
-                </label>
-                <input
-                  id="job-url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  disabled={isLoading || !base}
-                  placeholder="https://jobs.example.com/senior-product-designer"
-                  className="w-full box-border border border-line-2 rounded-[10px] text-[14px] px-3 py-[11px] bg-white text-ink disabled:opacity-60"
-                />
-                <button
-                  type="submit"
-                  disabled={isLoading || !base || !url.trim()}
-                  className="bg-brand hover:bg-brand-hover text-white border-0 rounded-[10px] px-4 h-[42px] text-[14px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default"
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (url.trim()) start(url.trim());
+                  }}
+                  className="flex flex-col gap-2"
                 >
-                  {isLoading ? "Tailoring…" : "Tailor resume →"}
-                </button>
-                <div className="text-[12px] text-subtle leading-[1.6]">
-                  Or prefix any posting:{" "}
-                  <code className="font-mono bg-chip text-ink px-1.5 py-0.5 rounded-[5px] text-[11.5px]">
-                    resume.buzz/<span className="text-brand">https://…</span>
-                  </code>
-                  <br />
-                  Scraped with Firecrawl.
-                </div>
-                {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
-              </form>
+                  <label className="eyebrow" htmlFor="job-url">
+                    Job URL
+                  </label>
+                  <input
+                    id="job-url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    disabled={isLoading || !base}
+                    placeholder="https://jobs.example.com/senior-product-designer"
+                    className="w-full box-border border border-line-2 rounded-[10px] text-[14px] px-3 py-[11px] bg-white text-ink disabled:opacity-60"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading || !base || !url.trim()}
+                    className="bg-brand hover:bg-brand-hover text-white border-0 rounded-[10px] px-4 h-[42px] text-[14px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default"
+                  >
+                    {isLoading ? "Tailoring…" : "Tailor resume →"}
+                  </button>
+                  <div className="text-[12px] text-subtle leading-[1.6]">
+                    Or prefix any posting:{" "}
+                    <code className="font-mono bg-chip text-ink px-1.5 py-0.5 rounded-[5px] text-[11.5px]">
+                      resume.buzz/<span className="text-brand">https://…</span>
+                    </code>
+                    <br />
+                    Scraped with Firecrawl.
+                  </div>
+                  {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
+                </form>
 
-              {isLoading && (
-                <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex flex-col gap-3.5">
-                  <div className="text-[12px] text-subtle break-all">{url}</div>
-                  <ol className="list-none m-0 p-0 flex flex-col gap-3">
-                    {STEPS.map((st, i) => {
-                      const done = i < step,
-                        active = i === step;
-                      return (
-                        <li
-                          key={i}
-                          className="flex gap-2.5 items-center"
-                          style={{ opacity: done || active ? 1 : 0.45 }}
+                {isLoading && (
+                  <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex flex-col gap-3.5">
+                    <div className="text-[12px] text-subtle break-all">{url}</div>
+                    <ol className="list-none m-0 p-0 flex flex-col gap-3">
+                      {STEPS.map((st, i) => {
+                        const done = i < step,
+                          active = i === step;
+                        return (
+                          <li
+                            key={i}
+                            className="flex gap-2.5 items-center"
+                            style={{ opacity: done || active ? 1 : 0.45 }}
+                          >
+                            <div
+                              className="w-5 h-5 rounded-full grid place-items-center flex-none text-white text-[11px] font-extrabold border-2 box-border"
+                              style={{
+                                background: done ? "#22b55e" : active ? "#1a6fe8" : "#fff",
+                                borderColor: done ? "#22b55e" : active ? "#1a6fe8" : "#d3dae8",
+                              }}
+                            >
+                              {done ? "✓" : i + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-semibold">{st.label}</div>
+                              <div className="text-[11.5px] text-subtle leading-[1.4]">{st.sub}</div>
+                            </div>
+                            <span
+                              className={`text-[11px] font-bold whitespace-nowrap ${done ? "text-ok-ink" : "text-brand"}`}
+                            >
+                              {done ? "done" : active ? "working…" : ""}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    <div className="h-[5px] bg-chip rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-linear-to-r from-brand to-ok transition-[width] duration-500"
+                        style={{ width: `${Math.min(100, Math.round((step / 4) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!isLoading && history.length > 0 && (
+                  <section className="flex flex-col gap-2">
+                    <h3 className="m-0 eyebrow">Recent</h3>
+                    <div className="bg-white border border-line-2 rounded-[14px] p-1.5 flex flex-col">
+                      {history.map((h, i) => (
+                        <Link
+                          key={h.id}
+                          href={`/j/${h.id}`}
+                          className="grid grid-cols-[34px_1fr_auto] gap-2.5 items-center text-left p-2 rounded-[10px] text-inherit hover:bg-canvas hover:no-underline hover:text-inherit"
                         >
                           <div
-                            className="w-5 h-5 rounded-full grid place-items-center flex-none text-white text-[11px] font-extrabold border-2 box-border"
-                            style={{
-                              background: done ? "#22b55e" : active ? "#1a6fe8" : "#fff",
-                              borderColor: done ? "#22b55e" : active ? "#1a6fe8" : "#d3dae8",
-                            }}
+                            className="w-[34px] h-[34px] rounded-[9px] text-white grid place-items-center font-extrabold text-[13px]"
+                            style={{ background: TINTS[i % TINTS.length] }}
                           >
-                            {done ? "✓" : i + 1}
+                            {h.company[0]?.toUpperCase()}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-semibold">{st.label}</div>
-                            <div className="text-[11.5px] text-subtle leading-[1.4]">{st.sub}</div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-[13px] truncate text-ink">{h.title}</div>
+                            <div className="text-[11.5px] text-subtle">
+                              {h.company} · {when(h.createdAt)}
+                            </div>
                           </div>
-                          <span
-                            className={`text-[11px] font-bold whitespace-nowrap ${done ? "text-ok-ink" : "text-brand"}`}
-                          >
-                            {done ? "done" : active ? "working…" : ""}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                  <div className="h-[5px] bg-chip rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-linear-to-r from-brand to-ok transition-[width] duration-500"
-                      style={{ width: `${Math.min(100, Math.round((step / 4) * 100))}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+                          <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
+                            {h.score}%
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
 
-              {!isLoading && history.length > 0 && (
-                <section className="flex flex-col gap-2">
-                  <h3 className="m-0 eyebrow">Recent</h3>
-                  <div className="bg-white border border-line-2 rounded-[14px] p-1.5 flex flex-col">
-                    {history.map((h, i) => (
-                      <Link
-                        key={h.id}
-                        href={`/j/${h.id}`}
-                        className="grid grid-cols-[34px_1fr_auto] gap-2.5 items-center text-left p-2 rounded-[10px] text-inherit hover:bg-canvas hover:no-underline hover:text-inherit"
-                      >
-                        <div
-                          className="w-[34px] h-[34px] rounded-[9px] text-white grid place-items-center font-extrabold text-[13px]"
-                          style={{ background: TINTS[i % TINTS.length] }}
-                        >
-                          {h.company[0]?.toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-semibold text-[13px] truncate text-ink">{h.title}</div>
-                          <div className="text-[11.5px] text-subtle">
-                            {h.company} · {when(h.createdAt)}
-                          </div>
-                        </div>
-                        <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
-                          {h.score}%
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
-          )}
-
-          {job && <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} />}
+            {job && <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} />}
+          </div>
         </aside>
 
         {/* RIGHT: resume / cover letter */}
         <section className="flex flex-col min-h-0 min-w-0 overflow-x-hidden bg-well">
-          <div className="flex items-center gap-1.5 gap-y-2 flex-wrap px-5 py-2.5 bg-white border-b border-line flex-none min-w-0">
+          <div className={`${toolbar} gap-1.5 gap-y-2 flex-wrap min-w-0`}>
             <div className="flex bg-well p-[3px] rounded-[10px] gap-0.5">
               <button onClick={() => setTab("resume")} className={tabCls(tab === "resume")}>
                 Resume
@@ -365,9 +410,51 @@ export function Workspace({
                 {cover && <span className="w-1.5 h-1.5 rounded-full bg-ok" />}
               </button>
             </div>
+            {tab === "resume" && (
+              <button
+                onClick={editing ? undefined : startEditing}
+                title={hasJob ? "Edit this resume" : "Edit base resume"}
+                aria-label={hasJob ? "Edit this resume" : "Edit base resume"}
+                aria-pressed={editing}
+                className={`w-[34px] h-[34px] grid place-items-center rounded-[9px] border cursor-pointer ${
+                  editing
+                    ? "bg-user-del border-user-mark text-user-ink"
+                    : "bg-white border-line-2 text-subtle hover:bg-canvas hover:text-ink"
+                }`}
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                </svg>
+              </button>
+            )}
             <div className="ml-auto flex gap-2 items-center">
               {!hasJob && <span className="text-[12.5px] text-faint whitespace-nowrap">Showing your base resume</span>}
-              {tab === "resume" && hasJob && (
+              {editing && (
+                <>
+                  {error && <span className="text-[12px] text-bad">{error}</span>}
+                  <button onClick={() => setBaseDrawer(true)} className={`${btnGhost} py-[7px]`}>
+                    Edit base resume
+                  </button>
+                  <button onClick={() => setDraft(null)} className={`${btnGhost} py-[7px]`}>
+                    Cancel
+                  </button>
+                  <button onClick={saveDraft} disabled={savingDraft} className={btnPrimary}>
+                    {savingDraft ? "Saving…" : "Save edits"}
+                  </button>
+                </>
+              )}
+              {tab === "resume" && hasJob && !editing && (
                 <>
                   <button
                     onClick={() => setShowDiff(!showDiff)}
@@ -389,7 +476,7 @@ export function Workspace({
                     </span>
                     Show changes
                     <span className="text-[11px] font-bold bg-ok-bg text-ok-ink px-1.5 py-0.5 rounded-full">
-                      {changeCount}
+                      {changes.total}
                     </span>
                   </button>
                   <button
@@ -401,13 +488,15 @@ export function Workspace({
                   </button>
                 </>
               )}
-              <button
-                onClick={() => window.print()}
-                disabled={!model || (tab === "cover" && !cover)}
-                className={`${btnDark} disabled:opacity-50`}
-              >
-                Download PDF
-              </button>
+              {!editing && (
+                <button
+                  onClick={() => window.print()}
+                  disabled={!model || (tab === "cover" && !cover)}
+                  className={`${btnDark} disabled:opacity-50`}
+                >
+                  Download PDF
+                </button>
+              )}
             </div>
           </div>
 
@@ -448,21 +537,28 @@ export function Workspace({
 
           {tab === "resume" && (
             <div className="flex-1 min-h-0 overflow-y-auto px-8 pt-7 pb-20 flex flex-col items-center gap-3.5">
-              {showDiff && hasJob && (
-                <div className="w-full max-w-[720px] flex gap-4 items-center text-[12.5px] text-muted bg-white border border-line-2 rounded-[10px] px-3.5 py-2">
-                  <span className="font-bold text-ink">{changeCount} edits</span>
-                  <span className="flex gap-1.5 items-center">
-                    <span className="w-3 h-3 rounded-[3px] bg-ok-mark" />
-                    Added or reworded
-                  </span>
-                  <span className="flex gap-1.5 items-center">
-                    <span className="w-3 h-3 rounded-[3px] bg-bad-mark" />
-                    Removed
-                  </span>
-                  <span className="ml-auto text-faint">Nothing fabricated — only phrasing, order and emphasis.</span>
+              {editing && (
+                <div className="w-full max-w-[720px] text-[12.5px] text-muted bg-white border border-line-2 rounded-[10px] px-3.5 py-2">
+                  Click any line to edit it. Your changes are tracked separately from the AI&apos;s and shown in{" "}
+                  <span className={`${DIFF_STYLES.u.swatch} rounded-[3px] px-1`}>purple</span>.
                 </div>
               )}
-              {model && base ? (
+              {showDiff && hasJob && !editing && (
+                <div className="w-full max-w-[720px] flex gap-x-4 gap-y-1 flex-wrap items-center text-[12.5px] text-muted bg-white border border-line-2 rounded-[10px] px-3.5 py-2">
+                  <span className="font-bold text-ink">
+                    {changes.total} edits{changes.user > 0 && ` · ${changes.user} yours`}
+                  </span>
+                  {Object.values(DIFF_STYLES).map((d) => (
+                    <span key={d.label} className="flex gap-1.5 items-center">
+                      <span className={`w-3 h-3 rounded-[3px] ${d.swatch}`} />
+                      {d.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {draft && base ? (
+                <TailoredEditor value={draft} onChange={setDraft} name={base.name} contact={base.contact} />
+              ) : model && base ? (
                 <ResumeDoc
                   model={model}
                   name={base.name}
@@ -557,6 +653,80 @@ export function Workspace({
   );
 }
 
+function HistoryMenu({ history, currentId }: { history: JobSummary[]; currentId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        title="History"
+        aria-label="History"
+        aria-expanded={open}
+        className={`w-[34px] h-[34px] grid place-items-center rounded-[9px] border cursor-pointer ${
+          open
+            ? "bg-canvas border-line-3 text-ink"
+            : "bg-white border-line-2 text-subtle hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-10 z-20 w-[360px] max-h-[60vh] overflow-y-auto bg-white border border-line-2 rounded-[12px] shadow-[0_8px_24px_rgba(15,27,61,.12)] p-1.5">
+            <div className="eyebrow px-2 pt-1.5 pb-2">History</div>
+            {history.length === 0 && <div className="px-2 pb-2 text-[13px] text-subtle">No previous jobs yet.</div>}
+            {history.map((h, i) => {
+              const current = h.id === currentId;
+              return (
+                <Link
+                  key={h.id}
+                  href={`/j/${h.id}`}
+                  onClick={() => setOpen(false)}
+                  aria-current={current ? "page" : undefined}
+                  className={`grid grid-cols-[30px_1fr_auto] gap-2.5 items-center p-2 rounded-[9px] text-inherit hover:no-underline hover:text-inherit ${
+                    current ? "bg-brand-tint" : "hover:bg-canvas"
+                  }`}
+                >
+                  <div
+                    className="w-[30px] h-[30px] rounded-lg text-white grid place-items-center font-extrabold text-[12px]"
+                    style={{ background: TINTS[i % TINTS.length] }}
+                  >
+                    {h.company[0]?.toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[13px] truncate text-ink">{h.title}</div>
+                    <div className="text-[11.5px] text-subtle truncate">
+                      {h.company} · {when(h.createdAt)}
+                    </div>
+                  </div>
+                  <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
+                    {h.score}%
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function UserMenu({ user }: { user: { name: string; email: string } }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -599,15 +769,6 @@ function JobPanel({ job, rawOpen, setRawOpen }: { job: Job; rawOpen: boolean; se
   return (
     <>
       <div className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-[10px] bg-ink text-white grid place-items-center font-extrabold text-[16px] flex-none">
-            {job.company[0]?.toUpperCase()}
-          </div>
-          <div>
-            <div className="font-extrabold text-[18px] tracking-[-.01em] leading-[1.2]">{job.title}</div>
-            <div className="text-[13px] text-muted">{[job.company, job.location].filter(Boolean).join(" · ")}</div>
-          </div>
-        </div>
         {pills.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
             {pills.map((p) => (
