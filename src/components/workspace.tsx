@@ -159,10 +159,7 @@ export function Workspace({
   const editing = !!draft;
   const editingHere = tab === "cover" ? coverDraft !== null : editing;
   // Tailored resumes are snapshots; flag when the base has changed since (null = tailored before we tracked it).
-  const stale = useMemo(
-    () => !!(job?.tailored && base && job.baseHash !== resumeHash(base)),
-    [job?.tailored, job?.baseHash, base],
-  );
+  const stale = useMemo(() => !!(job?.tailored && base && job.baseHash !== resumeHash(base)), [job, base]);
 
   // A URL to scrape, or a pasted description (LinkedIn etc. block crawlers) with an optional URL.
   // Resolves true once the job exists and we're navigating to it; the message is thrown otherwise.
