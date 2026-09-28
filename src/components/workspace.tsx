@@ -3,33 +3,30 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { TailorEvent } from "@/app/api/tailor/route";
 import type { Job } from "@/db/schema";
 import { alignToBase } from "@/lib/align";
-import { authClient } from "@/lib/auth-client";
 import type { JobSummary } from "@/lib/data";
 import {
   DEFAULT_PROMPT,
   hasUserEdits,
+  JOB_STAGES,
   JOB_STATUSES,
+  PIPELINE_STEPS,
   resumeHash,
+  stageInFlight,
   type Fact,
+  type JobStage,
   type Resume,
   type StoredTailored,
 } from "@/lib/types";
+import { hostOf, Spinner } from "./app-header";
 import { AutoTextarea } from "./auto-textarea";
 import { BaseResumeDrawer } from "./base-resume-drawer";
+import { toStatus, useJobStatus, useJobStatusActions } from "./job-status";
 import { StatusPicker, StatusPill } from "./status-picker";
-import { Logo } from "./logo";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
+import { confirmLeave, NEW_TAB, useLeaveGuard, useTabs } from "./tabs-store";
 import { TailoredEditor } from "./tailored-editor";
-
-const STEPS = [
-  { label: "Fetching the posting", sub: "Firecrawl renders the page and strips nav, footers and cookie banners" },
-  { label: "Extracting the job", sub: "Title, company, pay, requirements, keywords" },
-  { label: "Scoring against your base resume", sub: "What already matches, what doesn't" },
-  { label: "Tailoring", sub: "Small, truthful edits to wording, order and emphasis" },
-];
 
 const COVER_CHIPS = [
   "Confident but not salesy",
@@ -48,14 +45,6 @@ const btnPrimary =
   "bg-brand hover:bg-brand-hover text-white border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer disabled:opacity-60";
 const btnDark =
   "bg-ink hover:bg-ink-hover text-white border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer whitespace-nowrap";
-
-function initials(s: string) {
-  const parts = s
-    .replace(/@.*/, "")
-    .split(/[\s._-]+/)
-    .filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
-}
 
 function when(d: Date) {
   const days = Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
@@ -80,29 +69,80 @@ export function Workspace({
   autoUrl?: string;
 }) {
   const router = useRouter();
+  const tabs = useTabs();
+  const { prime, poke } = useJobStatusActions();
   const [job, setJob] = useState(initialJob);
-  const [phase, setPhase] = useState<"idle" | "loading">("idle");
-  const [step, setStep] = useState(0);
-  const [url, setUrl] = useState(autoUrl ?? "");
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<"resume" | "cover">("resume");
   const [showDiff, setShowDiff] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   const [prompt, setPrompt] = useState(initialJob?.prompt ?? DEFAULT_PROMPT);
-  const [regen, setRegen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const [baseDrawer, setBaseDrawer] = useState(false);
   const [draft, setDraft] = useState<StoredTailored | null>(null); // non-null = editing the tailored resume
   const [savingDraft, setSavingDraft] = useState(false);
+  const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "delete" | null>(null);
 
   const [coverPrompt, setCoverPrompt] = useState(initialJob?.coverPrompt ?? "");
-  const [cover, setCover] = useState<string[] | null>(initialJob?.coverLetter ?? null);
-  const [coverBusy, setCoverBusy] = useState(false);
   const [coverDraft, setCoverDraft] = useState<string | null>(null); // non-null = editing the letter (blank line = new paragraph)
 
+  // The URL box on the "new job" tab lives in the tab store so switching tabs doesn't lose it.
+  const url = tabs.draftUrl;
+  const setUrl = tabs.setDraftUrl;
+
   const hasJob = !!job;
-  const isLoading = phase === "loading";
+  const inFlight = !!job && stageInFlight(job.stage);
+  const failed = job?.stage === "failed";
+  const hasResume = !!job?.tailored;
+  // Re-running tailoring on a job that already has a resume (prompt change, base change, new facts).
+  const regen = inFlight && hasResume;
+  // A brand-new job still going through scrape → extract → score → tailor.
+  const building = inFlight && !hasResume;
+  const cover = job?.coverLetter ?? null;
+  const coverBusy = job?.coverStage === "writing";
+  const coverReady = !!job?.raw && !inFlight;
+
+  // --- Keep this job in sync with the background pipeline ---------------------------------------
+  // Tell the poller what the server just rendered, and register for updates.
+  const status = useJobStatus(job?.id);
+  useEffect(() => {
+    if (job) prime(toStatus(job));
+  }, [job, prime]);
+  // When the poller sees a newer version than we're showing, load it. That's how the title shows up
+  // mid-pipeline, the resume appears when tailoring finishes, and the letter lands when it's written.
+  const jobUpdatedAt = job ? new Date(job.updatedAt).getTime() : 0;
+  useEffect(() => {
+    if (!job || !status || status.missing) return;
+    if (new Date(status.updatedAt).getTime() <= jobUpdatedAt) return;
+    let cancelled = false;
+    fetch(`/api/jobs/${job.id}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((fresh: Job | null) => {
+        if (cancelled || !fresh) return;
+        setJob(fresh);
+        if (fresh.stage === "done" && job.stage !== "done") {
+          setShowDiff(true);
+          router.refresh(); // history lists in other views
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.updatedAt, jobUpdatedAt, job?.id]);
+  // Deleted from another window: leave gracefully.
+  useEffect(() => {
+    if (job && status?.missing) {
+      tabs.close(job.id);
+      router.replace("/");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.missing]);
+
+  useLeaveGuard(draft !== null || coverDraft !== null);
 
   const model = useMemo(() => {
     // Always follow the base resume's section/entry order, even for jobs tailored before a reorder.
@@ -120,40 +160,21 @@ export function Workspace({
 
   async function start(target: string) {
     setError(null);
-    setPhase("loading");
-    setStep(0);
+    setStarting(true);
     try {
       const res = await fetch("/api/tailor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: target }),
       });
-      if (!res.ok || !res.body) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `Request failed (${res.status})`);
-      }
-      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buf = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += value;
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines.filter(Boolean)) {
-          const ev = JSON.parse(line) as TailorEvent;
-          if ("step" in ev) setStep(ev.step);
-          if ("error" in ev) throw new Error(ev.error);
-          if ("done" in ev) {
-            router.push(`/j/${ev.done}`);
-            return;
-          }
-        }
-      }
-      throw new Error("The connection closed early. Try again.");
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+      // The "new job" tab becomes this job's tab; the pipeline keeps going on the server.
+      tabs.replace(NEW_TAB, body.id);
+      router.replace(`/j/${body.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
-      setPhase("idle");
+      setStarting(false);
     }
   }
 
@@ -161,10 +182,33 @@ export function Workspace({
   useEffect(() => {
     if (autoUrl && base && !started.current) {
       started.current = true;
+      setUrl(autoUrl);
       start(autoUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fire a background action on this job and mark it busy locally so the poller picks it up right away.
+  async function kick(path: string, init: RequestInit, patch: Partial<Job>, action: typeof busyAction) {
+    if (!job || busyAction) return false;
+    setBusyAction(action);
+    setError(null);
+    const res = await fetch(`/api/jobs/${job.id}${path}`, init);
+    const body = await res.json().catch(() => ({}));
+    setBusyAction(null);
+    if (!res.ok) {
+      setError(body.error ?? "That didn't work.");
+      return false;
+    }
+    setJob({ ...job, ...patch });
+    poke(job.id, {
+      stage: patch.stage,
+      error: patch.error,
+      coverStage: patch.coverStage,
+      coverError: patch.coverError,
+    });
+    return true;
+  }
 
   // "I do have this experience": remember it for every job, then re-tailor this one with it.
   async function addFact(keyword: string, detail: string) {
@@ -178,27 +222,44 @@ export function Workspace({
       return false;
     }
     router.refresh();
-    await regenerate();
+    await regenerate(true);
     return true;
   }
 
-  async function regenerate() {
-    if (!job || regen) return;
-    if (job.tailored && hasUserEdits(job.tailored) && !confirm("Regenerating replaces your manual edits. Continue?"))
+  async function regenerate(skipConfirm = false) {
+    if (!job || inFlight) return;
+    if (
+      !skipConfirm &&
+      job.tailored &&
+      hasUserEdits(job.tailored) &&
+      !confirm("Regenerating replaces your manual edits. Continue?")
+    )
       return;
-    setRegen(true);
-    setError(null);
-    const res = await fetch(`/api/jobs/${job.id}/tailor`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-    });
-    const body = await res.json();
-    setRegen(false);
-    if (!res.ok) return setError(body.error ?? "Regenerate failed.");
-    setJob(body);
-    setPromptOpen(false);
-    setShowDiff(true);
+    const ok = await kick(
+      "/tailor",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) },
+      { stage: "queued", error: null, prompt },
+      "regen",
+    );
+    if (ok) setPromptOpen(false);
+  }
+
+  async function retry() {
+    await kick("/retry", { method: "POST" }, { stage: "queued", error: null }, "retry");
+  }
+
+  // Removing a job that's still working also cancels it.
+  async function discard() {
+    if (!job) return;
+    const msg = inFlight ? "Stop tailoring this job and remove it?" : "Remove this job?";
+    if (!confirm(msg)) return;
+    setBusyAction("delete");
+    const res = await fetch(`/api/jobs/${job.id}`, { method: "DELETE" });
+    setBusyAction(null);
+    if (!res.ok && res.status !== 404) return setError("Couldn't remove it. Try again.");
+    tabs.close(job.id);
+    router.replace("/");
+    router.refresh();
   }
 
   // The browser's "Save as PDF" uses document.title as the file name.
@@ -249,24 +310,19 @@ export function Workspace({
     const body = await res.json();
     setSavingDraft(false);
     if (!res.ok) return setError(body.error ?? "Save failed.");
-    setCover(body.coverLetter);
+    setJob(body);
     setCoverDraft(null);
   }
 
   async function generateCover() {
     if (!job || coverBusy) return;
     if (cover && !confirm("Replace the current letter (including any edits) with a new one?")) return;
-    setCoverBusy(true);
-    setError(null);
-    const res = await fetch(`/api/jobs/${job.id}/cover`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: coverPrompt }),
-    });
-    const body = await res.json();
-    setCoverBusy(false);
-    if (!res.ok) return setError(body.error ?? "Cover letter failed.");
-    setCover(body.coverLetter);
+    await kick(
+      "/cover",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: coverPrompt }) },
+      { coverStage: "writing", coverError: null, coverPrompt },
+      "cover",
+    );
   }
 
   const tabCls = (on: boolean) =>
@@ -275,165 +331,151 @@ export function Workspace({
     }`;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      <header className="flex items-center gap-3.5 px-5 py-2.5 bg-white border-b border-line flex-none min-h-[64px]">
-        <Link href="/" className="hover:no-underline">
-          <Logo height={26} priority />
-        </Link>
-        <div className="ml-auto flex gap-2 items-center">
-          {hasJob && (
-            <span className="text-[12px] text-faint flex items-center gap-1.5 whitespace-nowrap">
-              <span className="w-[7px] h-[7px] rounded-full bg-ok" />
-              Saved to history
-            </span>
-          )}
-          <UserMenu user={user} />
-        </div>
-      </header>
-
-      <div className="flex-1 min-h-0 grid grid-cols-[minmax(320px,5fr)_minmax(0,7fr)]">
-        {/* LEFT: job summary */}
-        <aside className="flex flex-col min-h-0 border-r border-line bg-panel">
-          {job && (
-            <div className={`${toolbar} gap-2.5`}>
+    <div className="flex-1 min-h-0 grid grid-cols-[minmax(320px,5fr)_minmax(0,7fr)]">
+      {/* LEFT: job summary */}
+      <aside className="flex flex-col min-h-0 border-r border-line bg-panel">
+        {job && (
+          <div className={`${toolbar} gap-2.5`}>
+            {building ? (
+              <Spinner className="w-8 h-8 border-[3px]" />
+            ) : (
               <div className="w-8 h-8 rounded-lg bg-ink text-white grid place-items-center font-extrabold text-[14px] flex-none">
-                {job.company[0]?.toUpperCase()}
+                {(job.company || job.title || hostOf(job.url))[0]?.toUpperCase()}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate" title={job.title}>
-                  {job.title}
+            )}
+            <div className="min-w-0 flex-1">
+              <div
+                className="font-extrabold text-[14px] tracking-[-.01em] leading-tight truncate"
+                title={job.title || job.url}
+              >
+                {job.title || hostOf(job.url)}
+              </div>
+              <div className={`text-[12px] truncate ${inFlight ? "text-brand" : failed ? "text-bad" : "text-muted"}`}>
+                {inFlight
+                  ? `${JOB_STAGES[job.stage].label}…`
+                  : failed && !hasResume
+                    ? "Failed"
+                    : [job.company, job.location].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            {hasResume && <StatusPicker key={job.status} jobId={job.id} status={job.status} />}
+            <HistoryMenu history={history} currentId={job.id} />
+          </div>
+        )}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-[60px] flex flex-col gap-[22px]">
+          {!hasJob && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <h1 className="m-0 text-[22px] leading-[1.2] font-extrabold tracking-[-.02em] text-pretty">
+                  Paste a job. Get a resume built for it.
+                </h1>
+                <p className="m-0 text-[13px] leading-normal text-muted text-pretty">
+                  We read the posting, make small honest edits to your base resume, and show exactly what changed.
+                  Each job opens in its own tab, so you can start the next one while this one works.
+                </p>
+              </div>
+
+              {!base && (
+                <div className="bg-white border border-dashed border-[#b9c6de] rounded-[14px] px-[18px] py-4 flex flex-col gap-2">
+                  <div className="font-bold text-[14px]">Start with your base resume</div>
+                  <div className="text-[12.5px] text-subtle">
+                    Upload a PDF or DOCX once. Every tailored version is built from it.
+                  </div>
+                  <button onClick={() => setBaseDrawer(true)} className={`${btnDark} self-start`}>
+                    Add base resume →
+                  </button>
                 </div>
-                <div className="text-[12px] text-muted truncate">
-                  {[job.company, job.location].filter(Boolean).join(" · ")}
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (url.trim()) start(url.trim());
+                }}
+                className="flex flex-col gap-2"
+              >
+                <label className="eyebrow" htmlFor="job-url">
+                  Job URL
+                </label>
+                <input
+                  id="job-url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  disabled={starting || !base}
+                  placeholder="https://jobs.example.com/senior-product-designer"
+                  className="w-full box-border border border-line-2 rounded-[10px] text-[14px] px-3 py-[11px] bg-white text-ink disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={starting || !base || !url.trim()}
+                  className="bg-brand hover:bg-brand-hover text-white border-0 rounded-[10px] px-4 h-[42px] text-[14px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default"
+                >
+                  {starting ? "Starting…" : "Tailor resume →"}
+                </button>
+                <div className="text-[12px] text-subtle leading-[1.6]">
+                  Or prefix any posting:{" "}
+                  <code className="font-mono bg-chip text-ink px-1.5 py-0.5 rounded-[5px] text-[11.5px]">
+                    resume.buzz/<span className="text-brand">https://…</span>
+                  </code>
+                  <br />
+                  Scraped with Firecrawl.
+                </div>
+                {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
+              </form>
+
+              {history.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h3 className="m-0 eyebrow">Recent</h3>
+                  <div className="bg-white border border-line-2 rounded-[14px] p-1.5 flex flex-col">
+                    {history.map((h, i) => (
+                      <JobRow key={h.id} h={h} i={i} />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+
+          {job && building && (
+            <ProgressCard
+              url={job.url}
+              stage={job.stage}
+              onCancel={discard}
+              cancelling={busyAction === "delete"}
+            />
+          )}
+
+          {job && failed && (
+            <div className="bg-white border border-[#f1c4c4] rounded-[14px] px-[18px] py-4 flex flex-col gap-3">
+              <div className="flex gap-2.5 items-start">
+                <span className="w-5 h-5 rounded-full bg-bad-bg text-bad grid place-items-center text-[12px] font-extrabold flex-none">
+                  !
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-[14px]">{hasResume ? "Re-tailoring failed" : "Tailoring failed"}</div>
+                  <div className="text-[12.5px] text-muted leading-[1.5] mt-0.5 break-words">
+                    {job.error || "Something went wrong."}
+                  </div>
+                  {!hasResume && <div className="text-[12px] text-subtle break-all mt-1.5">{job.url}</div>}
                 </div>
               </div>
-              <StatusPicker key={job.status} jobId={job.id} status={job.status} />
-              <HistoryMenu history={history} currentId={job.id} />
-              <Link href="/" className={`${btnGhost} hover:no-underline`}>
-                New job
-              </Link>
+              {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
+              <div className="flex gap-2 justify-end">
+                <button onClick={discard} disabled={!!busyAction} className={btnGhost}>
+                  {busyAction === "delete" ? "Removing…" : hasResume ? "Remove job" : "Discard"}
+                </button>
+                <button onClick={retry} disabled={!!busyAction} className={btnPrimary}>
+                  {busyAction === "retry" ? "Retrying…" : "Retry"}
+                </button>
+              </div>
             </div>
           )}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-[60px] flex flex-col gap-[22px]">
-            {!hasJob && (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <h1 className="m-0 text-[22px] leading-[1.2] font-extrabold tracking-[-.02em] text-pretty">
-                    Paste a job. Get a resume built for it.
-                  </h1>
-                  <p className="m-0 text-[13px] leading-normal text-muted text-pretty">
-                    We read the posting, make small honest edits to your base resume, and show exactly what changed.
-                  </p>
-                </div>
 
-                {!base && (
-                  <div className="bg-white border border-dashed border-[#b9c6de] rounded-[14px] px-[18px] py-4 flex flex-col gap-2">
-                    <div className="font-bold text-[14px]">Start with your base resume</div>
-                    <div className="text-[12.5px] text-subtle">
-                      Upload a PDF or DOCX once. Every tailored version is built from it.
-                    </div>
-                    <button onClick={() => setBaseDrawer(true)} className={`${btnDark} self-start`}>
-                      Add base resume →
-                    </button>
-                  </div>
-                )}
-
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (url.trim()) start(url.trim());
-                  }}
-                  className="flex flex-col gap-2"
-                >
-                  <label className="eyebrow" htmlFor="job-url">
-                    Job URL
-                  </label>
-                  <input
-                    id="job-url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    disabled={isLoading || !base}
-                    placeholder="https://jobs.example.com/senior-product-designer"
-                    className="w-full box-border border border-line-2 rounded-[10px] text-[14px] px-3 py-[11px] bg-white text-ink disabled:opacity-60"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isLoading || !base || !url.trim()}
-                    className="bg-brand hover:bg-brand-hover text-white border-0 rounded-[10px] px-4 h-[42px] text-[14px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default"
-                  >
-                    {isLoading ? "Tailoring…" : "Tailor resume →"}
-                  </button>
-                  <div className="text-[12px] text-subtle leading-[1.6]">
-                    Or prefix any posting:{" "}
-                    <code className="font-mono bg-chip text-ink px-1.5 py-0.5 rounded-[5px] text-[11.5px]">
-                      resume.buzz/<span className="text-brand">https://…</span>
-                    </code>
-                    <br />
-                    Scraped with Firecrawl.
-                  </div>
-                  {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
-                </form>
-
-                {isLoading && (
-                  <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex flex-col gap-3.5">
-                    <div className="text-[12px] text-subtle break-all">{url}</div>
-                    <ol className="list-none m-0 p-0 flex flex-col gap-3">
-                      {STEPS.map((st, i) => {
-                        const done = i < step,
-                          active = i === step;
-                        return (
-                          <li
-                            key={i}
-                            className="flex gap-2.5 items-center"
-                            style={{ opacity: done || active ? 1 : 0.45 }}
-                          >
-                            <div
-                              className="w-5 h-5 rounded-full grid place-items-center flex-none text-white text-[11px] font-extrabold border-2 box-border"
-                              style={{
-                                background: done ? "#22b55e" : active ? "#1a6fe8" : "#fff",
-                                borderColor: done ? "#22b55e" : active ? "#1a6fe8" : "#d3dae8",
-                              }}
-                            >
-                              {done ? "✓" : i + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[13px] font-semibold">{st.label}</div>
-                              <div className="text-[11.5px] text-subtle leading-[1.4]">{st.sub}</div>
-                            </div>
-                            <span
-                              className={`text-[11px] font-bold whitespace-nowrap ${done ? "text-ok-ink" : "text-brand"}`}
-                            >
-                              {done ? "done" : active ? "working…" : ""}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                    <div className="h-[5px] bg-chip rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-linear-to-r from-brand to-ok transition-[width] duration-500"
-                        style={{ width: `${Math.min(100, Math.round((step / 4) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {!isLoading && history.length > 0 && (
-                  <section className="flex flex-col gap-2">
-                    <h3 className="m-0 eyebrow">Recent</h3>
-                    <div className="bg-white border border-line-2 rounded-[14px] p-1.5 flex flex-col">
-                      {history.map((h, i) => (
-                        <JobRow key={h.id} h={h} i={i} />
-                      ))}
-                    </div>
-                  </section>
-                )}
-              </>
-            )}
-
-            {job && <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} onAddFact={addFact} busy={regen} />}
-          </div>
-        </aside>
+          {job && !!job.scoreNote && (
+            <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} onAddFact={addFact} busy={inFlight} />
+          )}
+        </div>
+      </aside>
 
         {/* RIGHT: resume / cover letter */}
         <section className="flex flex-col min-h-0 min-w-0 overflow-x-hidden bg-well">
@@ -444,20 +486,21 @@ export function Workspace({
               </button>
               <button
                 onClick={() => {
-                  if (hasJob) {
+                  if (coverReady) {
                     setTab("cover");
                     setPromptOpen(false);
                   }
                 }}
-                disabled={!hasJob}
+                disabled={!coverReady}
+                title={hasJob && !coverReady ? "Available once the resume is tailored" : undefined}
                 className={tabCls(tab === "cover")}
-                style={{ opacity: hasJob ? 1 : 0.45 }}
+                style={{ opacity: coverReady ? 1 : 0.45 }}
               >
                 Cover letter
-                {cover && <span className="w-1.5 h-1.5 rounded-full bg-ok" />}
+                {coverBusy ? <Spinner className="w-3 h-3" /> : cover && <span className="w-1.5 h-1.5 rounded-full bg-ok" />}
               </button>
             </div>
-            {(tab === "resume" || (cover && !coverBusy)) && (
+            {((tab === "resume" && !building) || (tab === "cover" && cover && !coverBusy)) && (
               <button
                 onClick={
                   editingHere
@@ -492,7 +535,11 @@ export function Workspace({
               </button>
             )}
             <div className="ml-auto flex gap-2 items-center">
-              {!hasJob && <span className="text-[12.5px] text-faint whitespace-nowrap">Showing your base resume</span>}
+              {(!hasJob || building) && (
+                <span className="text-[12.5px] text-faint whitespace-nowrap">
+                  {building ? "Showing your base resume while this tailors" : "Showing your base resume"}
+                </span>
+              )}
               {editingHere && (
                 <>
                   {error && <span className="text-[12px] text-bad">{error}</span>}
@@ -516,7 +563,7 @@ export function Workspace({
                   </button>
                 </>
               )}
-              {tab === "resume" && hasJob && !editing && (
+              {tab === "resume" && hasResume && !editing && (
                 <>
                   <button
                     onClick={() => setShowDiff(!showDiff)}
@@ -553,7 +600,7 @@ export function Workspace({
               {!editingHere && (
                 <button
                   onClick={downloadPdf}
-                  disabled={!model || (tab === "cover" && !cover)}
+                  disabled={!model || building || (tab === "cover" && !cover)}
                   className={`${btnDark} disabled:opacity-50`}
                 >
                   Download PDF
@@ -590,8 +637,8 @@ export function Workspace({
                 <button onClick={() => setPromptOpen(false)} className={btnGhost}>
                   Close
                 </button>
-                <button onClick={regenerate} disabled={regen} className={btnPrimary}>
-                  {regen ? "Regenerating…" : "Regenerate resume"}
+                <button onClick={() => regenerate()} disabled={inFlight || !!busyAction} className={btnPrimary}>
+                  {inFlight ? "Regenerating…" : "Regenerate resume"}
                 </button>
               </div>
             </div>
@@ -605,7 +652,15 @@ export function Workspace({
                   <span className={`${DIFF_STYLES.u.swatch} rounded-[3px] px-1`}>purple</span>.
                 </div>
               )}
-              {stale && !editing && (
+              {regen && (
+                <div className="w-full max-w-[720px] flex gap-3 items-center text-[12.5px] bg-brand-tint border border-[#c9dbf7] text-brand rounded-[10px] px-3.5 py-2.5">
+                  <Spinner className="w-4 h-4" />
+                  <span className="flex-1">
+                    <b>Re-tailoring…</b> You can switch tabs; this keeps going in the background.
+                  </span>
+                </div>
+              )}
+              {stale && !editing && !inFlight && (
                 <div className="w-full max-w-[720px] flex gap-3 items-center text-[12.5px] bg-warn-bg border border-[#f0d9a8] text-[#6b4a00] rounded-[10px] px-3.5 py-2.5">
                   <span className="flex-1">
                     <b>Your base resume changed</b> since this was tailored, so this version may be missing your latest
@@ -615,12 +670,16 @@ export function Workspace({
                       " Re-tailoring replaces your manual edits on this job."}
                   </span>
                   {error && !promptOpen && <span className="text-bad">{error}</span>}
-                  <button onClick={regenerate} disabled={regen} className={`${btnPrimary} whitespace-nowrap`}>
-                    {regen ? "Re-tailoring…" : "Re-tailor"}
+                  <button
+                    onClick={() => regenerate()}
+                    disabled={!!busyAction}
+                    className={`${btnPrimary} whitespace-nowrap`}
+                  >
+                    Re-tailor
                   </button>
                 </div>
               )}
-              {showDiff && hasJob && !editing && (
+              {showDiff && hasResume && !editing && !inFlight && (
                 <div className="w-full max-w-[720px] flex gap-x-4 gap-y-1 flex-wrap items-center text-[12.5px] text-muted bg-white border border-line-2 rounded-[10px] px-3.5 py-2">
                   <span className="font-bold text-ink">
                     {changes.total} edits{changes.user > 0 && ` · ${changes.user} yours`}
@@ -640,8 +699,8 @@ export function Workspace({
                   model={model}
                   name={base.name}
                   contact={base.contact}
-                  showDiff={showDiff && hasJob}
-                  dim={regen}
+                  showDiff={showDiff && hasResume}
+                  dim={inFlight}
                 />
               ) : (
                 <div className="w-full max-w-[720px] border border-dashed border-line-3 rounded-[14px] px-6 py-12 text-center text-faint text-[13.5px] leading-normal">
@@ -678,13 +737,15 @@ export function Workspace({
                     ))}
                     <button
                       onClick={generateCover}
-                      disabled={coverBusy}
+                      disabled={coverBusy || !!busyAction}
                       className={`${btnPrimary} ml-auto px-4 py-[9px]`}
                     >
                       {coverBusy ? "Writing…" : cover ? "Regenerate" : "Generate cover letter"}
                     </button>
                   </div>
-                  {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
+                  {(error || job.coverStage === "failed") && (
+                    <p className="m-0 text-[12.5px] text-bad">{error ?? job.coverError ?? "Cover letter failed."}</p>
+                  )}
                 </div>
               )}
 
@@ -708,6 +769,9 @@ export function Workspace({
                 </article>
               ) : coverBusy ? (
                 <div className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border flex flex-col gap-3">
+                  <div className="text-[12px] text-brand font-semibold mb-2">
+                    Writing… you can switch tabs; it keeps going in the background.
+                  </div>
                   {[92, 100, 96, 60, 100, 88, 40].map((w, i) => (
                     <div
                       key={i}
@@ -741,9 +805,71 @@ export function Workspace({
             </div>
           )}
         </section>
-      </div>
 
       {baseDrawer && <BaseResumeDrawer initial={base} facts={facts} onClose={() => setBaseDrawer(false)} />}
+    </div>
+  );
+}
+
+function ProgressCard({
+  url,
+  stage,
+  onCancel,
+  cancelling,
+}: {
+  url: string;
+  stage: JobStage;
+  onCancel: () => void;
+  cancelling: boolean;
+}) {
+  const current = PIPELINE_STEPS.indexOf(stage as (typeof PIPELINE_STEPS)[number]);
+  const progress = stage === "done" ? 1 : Math.max(0, current) / PIPELINE_STEPS.length;
+  return (
+    <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex flex-col gap-3.5">
+      <div className="text-[12px] text-subtle break-all">{url}</div>
+      <ol className="list-none m-0 p-0 flex flex-col gap-3">
+        {PIPELINE_STEPS.map((st, i) => {
+          const done = stage === "done" || i < current,
+            active = i === current;
+          return (
+            <li key={st} className="flex gap-2.5 items-center" style={{ opacity: done || active ? 1 : 0.45 }}>
+              <div
+                className="w-5 h-5 rounded-full grid place-items-center flex-none text-white text-[11px] font-extrabold border-2 box-border"
+                style={{
+                  background: done ? "#22b55e" : active ? "#1a6fe8" : "#fff",
+                  borderColor: done ? "#22b55e" : active ? "#1a6fe8" : "#d3dae8",
+                }}
+              >
+                {done ? "✓" : i + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold">{JOB_STAGES[st].label}</div>
+                <div className="text-[11.5px] text-subtle leading-[1.4]">{JOB_STAGES[st].sub}</div>
+              </div>
+              <span className={`text-[11px] font-bold whitespace-nowrap ${done ? "text-ok-ink" : "text-brand"}`}>
+                {done ? "done" : active ? "working…" : ""}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="h-[5px] bg-chip rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full bg-linear-to-r from-brand to-ok transition-[width] duration-500"
+          style={{ width: `${Math.round(progress * 100)}%` }}
+        />
+      </div>
+      <div className="flex justify-between items-center text-[12px] text-faint">
+        <span>Runs on the server. Open another tab meanwhile.</span>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={cancelling}
+          className="bg-transparent border-0 p-0 text-[12px] font-semibold text-subtle cursor-pointer hover:text-bad disabled:opacity-60"
+        >
+          {cancelling ? "Cancelling…" : "Cancel"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -764,6 +890,11 @@ function JobRow({
   const applied = h.appliedAt
     ? ` · Applied ${new Date(h.appliedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
     : "";
+  // Live view of jobs still being tailored (the server-rendered summary is a snapshot).
+  const live = useJobStatus(stageInFlight(h.stage) ? h.id : null) ?? h;
+  const working = stageInFlight(live.stage);
+  const failed = live.stage === "failed";
+  const title = live.title || h.title || hostOf(h.url);
   return (
     <div
       className={`flex items-center gap-2.5 p-2 rounded-[10px] ${current ? "bg-brand-tint" : "hover:bg-canvas"} ${
@@ -772,26 +903,42 @@ function JobRow({
     >
       <Link
         href={`/j/${h.id}`}
-        onClick={onNavigate}
+        onClick={(e) => {
+          if (!current && !confirmLeave()) return e.preventDefault();
+          onNavigate?.();
+        }}
         aria-current={current ? "page" : undefined}
         className="flex-1 min-w-0 flex items-center gap-2.5 text-inherit hover:no-underline hover:text-inherit"
       >
-        <div
-          className="w-[32px] h-[32px] flex-none rounded-[9px] text-white grid place-items-center font-extrabold text-[12.5px]"
-          style={{ background: TINTS[i % TINTS.length] }}
-        >
-          {h.company[0]?.toUpperCase()}
-        </div>
+        {working ? (
+          <div className="w-[32px] h-[32px] flex-none grid place-items-center">
+            <Spinner />
+          </div>
+        ) : (
+          <div
+            className="w-[32px] h-[32px] flex-none rounded-[9px] text-white grid place-items-center font-extrabold text-[12.5px]"
+            style={{ background: failed ? "#b23b3b" : TINTS[i % TINTS.length] }}
+          >
+            {failed ? "!" : (live.company || title)[0]?.toUpperCase()}
+          </div>
+        )}
         <div className="min-w-0">
-          <div className="font-semibold text-[13px] truncate text-ink">{h.title}</div>
-          <div className="text-[11.5px] text-subtle truncate">
-            {h.company} · {when(h.createdAt)}
-            {applied}
+          <div className="font-semibold text-[13px] truncate text-ink">{title}</div>
+          <div className={`text-[11.5px] truncate ${working ? "text-brand" : failed ? "text-bad" : "text-subtle"}`}>
+            {working
+              ? `${JOB_STAGES[live.stage].label}…`
+              : failed
+                ? "Failed · click to retry"
+                : `${live.company} · ${when(h.createdAt)}${applied}`}
           </div>
         </div>
       </Link>
-      {readOnly ? <StatusPill status={h.status} /> : <StatusPicker key={h.status} jobId={h.id} status={h.status} />}
-      <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">{h.score}%</div>
+      {!working &&
+        !failed &&
+        (readOnly ? <StatusPill status={h.status} /> : <StatusPicker key={h.status} jobId={h.id} status={h.status} />)}
+      {!working && !failed && (
+        <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">{live.score}%</div>
+      )}
     </div>
   );
 }
@@ -847,37 +994,6 @@ function HistoryMenu({ history, currentId }: { history: JobSummary[]; currentId:
             })}
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-function UserMenu({ user }: { user: { name: string; email: string } }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        title={user.email}
-        className="w-8 h-8 rounded-full bg-brand text-white grid place-items-center text-[12px] font-bold border-0 cursor-pointer"
-      >
-        {initials(user.name || user.email)}
-      </button>
-      {open && (
-        <div className="absolute right-0 top-10 z-10 bg-white border border-line-2 rounded-[10px] shadow-[0_8px_24px_rgba(15,27,61,.12)] p-1.5 min-w-[200px]">
-          <div className="px-2.5 py-2 text-[12px] text-subtle truncate">{user.email}</div>
-          <button
-            onClick={async () => {
-              await authClient.signOut();
-              router.replace("/login");
-              router.refresh();
-            }}
-            className="w-full text-left bg-transparent hover:bg-canvas border-0 rounded-md px-2.5 py-2 text-[13px] font-semibold text-ink cursor-pointer"
-          >
-            Sign out
-          </button>
-        </div>
       )}
     </div>
   );
@@ -971,6 +1087,7 @@ function JobPanel({
         </section>
       )}
 
+      {(job.keywordsHit.length > 0 || job.keywordsMissing.length > 0) && (
       <section className="flex flex-col gap-2">
         <h3 className="m-0 eyebrow">Keywords</h3>
         <div className="flex flex-wrap gap-1.5">
@@ -1036,6 +1153,7 @@ function JobPanel({
           Green = in your tailored resume · red = not in your resume yet. Click one you actually have to add it.
         </div>
       </section>
+      )}
 
       <section className="flex flex-col gap-2">
         <button

@@ -114,6 +114,30 @@ export const JOB_STATUSES = {
 export type JobStatus = keyof typeof JOB_STATUSES;
 export const isJobStatus = (s: unknown): s is JobStatus => typeof s === "string" && s in JOB_STATUSES;
 
+// Where a job is in the scrape → extract → score → tailor pipeline. The work runs on the server after the
+// request that started it returns, so any tab (or a fresh page load) can pick up progress by polling.
+export const JOB_STAGES = {
+  queued: { label: "Queued", sub: "Waiting to start" },
+  scraping: { label: "Fetching the posting", sub: "Firecrawl renders the page and strips nav, footers and cookie banners" },
+  extracting: { label: "Extracting the job", sub: "Title, company, pay, requirements, keywords" },
+  scoring: { label: "Scoring against your base resume", sub: "What already matches, what doesn't" },
+  tailoring: { label: "Tailoring", sub: "Small, truthful edits to wording, order and emphasis" },
+  done: { label: "Done", sub: "" },
+  failed: { label: "Failed", sub: "" },
+} as const;
+export type JobStage = keyof typeof JOB_STAGES;
+// The steps shown in the progress card, in order.
+export const PIPELINE_STEPS = ["scraping", "extracting", "scoring", "tailoring"] as const satisfies JobStage[];
+export const isJobStage = (s: unknown): s is JobStage => typeof s === "string" && s in JOB_STAGES;
+export const stageInFlight = (s: JobStage) => s !== "done" && s !== "failed";
+
+export type CoverStage = "idle" | "writing" | "failed";
+
+// A pipeline that hasn't advanced in this long is considered dead (the function was killed or crashed
+// without recording a failure). Longer than any single step should take under the 300s route limit.
+export const STAGE_TIMEOUT_MS = 5 * 60_000;
+export const STAGE_TIMEOUT_MESSAGE = "This took too long and was stopped. Try again.";
+
 export const EMPTY_RESUME: Resume = {
   name: "",
   headline: "",

@@ -1,41 +1,23 @@
-import { and, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { job } from "@/db/schema";
-import { tailorResume } from "@/lib/ai";
-import { getBaseResume, getFacts, getJob, userFromRequest } from "@/lib/data";
-import { DEFAULT_PROMPT, resumeHash } from "@/lib/types";
+import { getBaseResume, getJob, userFromRequest } from "@/lib/data";
+import { retailorJob } from "@/lib/pipeline";
+import { DEFAULT_PROMPT, stageInFlight } from "@/lib/types";
 
 export const maxDuration = 300;
 
-// Re-run tailoring for an existing job with an edited prompt.
+// Re-run tailoring for an existing job (edited prompt, changed base resume, new facts). Runs in the
+// background; poll GET /api/jobs?ids= for progress.
 export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]/tailor">) {
   const user = await userFromRequest(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const [row, base, facts] = await Promise.all([getJob(user.id, id), getBaseResume(user.id), getFacts(user.id)]);
+  const [row, base] = await Promise.all([getJob(user.id, id), getBaseResume(user.id)]);
   if (!row) return Response.json({ error: "Not found" }, { status: 404 });
   if (!base) return Response.json({ error: "Add your base resume first." }, { status: 400 });
+  if (stageInFlight(row.stage)) return Response.json({ error: "This job is already being tailored." }, { status: 409 });
+  if (!row.raw) return Response.json({ error: "This job never finished loading. Retry it first." }, { status: 409 });
 
   const { prompt } = (await request.json()) as { prompt?: string };
-  const tailorPrompt = prompt?.trim() || DEFAULT_PROMPT;
-  try {
-    const tailored = await tailorResume(base, row.raw, tailorPrompt, facts);
-    const [updated] = await db
-      .update(job)
-      .set({
-        prompt: tailorPrompt,
-        tailored,
-        baseHash: resumeHash(base),
-        keywordsHit: tailored.keywordsHit,
-        keywordsMissing: tailored.keywordsMissing,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(job.id, id), eq(job.userId, user.id)))
-      .returning();
-    return Response.json(updated);
-  } catch (err) {
-    console.error(err);
-    return Response.json({ error: err instanceof Error ? err.message : "Tailoring failed." }, { status: 500 });
-  }
+  await retailorJob(row, prompt?.trim() || DEFAULT_PROMPT);
+  return Response.json({ id, stage: "queued" }, { status: 202 });
 }

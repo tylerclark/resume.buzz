@@ -1,9 +1,9 @@
 import "server-only";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { baseResume, job, type Job } from "@/db/schema";
 import { auth } from "./auth";
-import type { Fact, Resume } from "./types";
+import { STAGE_TIMEOUT_MESSAGE, STAGE_TIMEOUT_MS, stageInFlight, type Fact, type Resume } from "./types";
 
 export async function userFromRequest(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -36,33 +36,78 @@ export async function saveBaseResume(userId: string, data: Resume) {
     .onConflictDoUpdate({ target: baseResume.userId, set: { data, updatedAt: new Date() } });
 }
 
+// A pipeline that stopped reporting progress (killed function, crash before the failure write) would
+// otherwise spin forever. Every read goes through here so the UI sees it as failed and offers a retry.
+export function settleStale<T extends Pick<Job, "stage" | "error" | "coverStage" | "coverError" | "updatedAt">>(
+  row: T,
+): T {
+  const stuck = Date.now() - new Date(row.updatedAt).getTime() > STAGE_TIMEOUT_MS;
+  if (!stuck) return row;
+  const out = { ...row };
+  if (stageInFlight(row.stage)) {
+    out.stage = "failed";
+    out.error = STAGE_TIMEOUT_MESSAGE;
+  }
+  if (row.coverStage === "writing") {
+    out.coverStage = "failed";
+    out.coverError = STAGE_TIMEOUT_MESSAGE;
+  }
+  return out;
+}
+
 export async function getJob(userId: string, id: string): Promise<Job | null> {
   const [row] = await db
     .select()
     .from(job)
     .where(and(eq(job.id, id), eq(job.userId, userId)));
-  return row ?? null;
+  return row ? settleStale(row) : null;
 }
 
+export async function deleteJob(userId: string, id: string) {
+  const rows = await db
+    .delete(job)
+    .where(and(eq(job.id, id), eq(job.userId, userId)))
+    .returning({ id: job.id });
+  return rows.length > 0;
+}
+
+// The fields the tab bar / history rows / poller need. Small enough to fetch for many jobs at once.
+const summaryColumns = {
+  id: job.id,
+  url: job.url,
+  title: job.title,
+  company: job.company,
+  score: job.score,
+  status: job.status,
+  stage: job.stage,
+  error: job.error,
+  coverStage: job.coverStage,
+  coverError: job.coverError,
+  hasCover: sql<boolean>`${job.coverLetter} is not null`,
+  statusAt: job.statusAt,
+  appliedAt: job.appliedAt,
+  createdAt: job.createdAt,
+  updatedAt: job.updatedAt,
+};
+
 export async function listJobs(userId: string, limit = 12) {
-  return (
-    db
-      .select({
-        id: job.id,
-        title: job.title,
-        company: job.company,
-        score: job.score,
-        status: job.status,
-        statusAt: job.statusAt,
-        appliedAt: job.appliedAt,
-        createdAt: job.createdAt,
-      })
-      .from(job)
-      .where(eq(job.userId, userId))
-      // Closed jobs (rejected / no longer interested) sink to the bottom.
-      .orderBy(sql`${job.status} in ('rejected', 'withdrawn')`, desc(job.createdAt))
-      .limit(limit)
-  );
+  const rows = await db
+    .select(summaryColumns)
+    .from(job)
+    .where(eq(job.userId, userId))
+    // Closed jobs (rejected / no longer interested) sink to the bottom.
+    .orderBy(sql`${job.status} in ('rejected', 'withdrawn')`, desc(job.createdAt))
+    .limit(limit);
+  return rows.map(settleStale);
+}
+
+export async function listJobsByIds(userId: string, ids: string[]) {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select(summaryColumns)
+    .from(job)
+    .where(and(eq(job.userId, userId), inArray(job.id, ids)));
+  return rows.map(settleStale);
 }
 
 export type JobSummary = Awaited<ReturnType<typeof listJobs>>[number];

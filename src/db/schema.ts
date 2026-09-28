@@ -1,5 +1,5 @@
 import { boolean, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { Fact, JobRequirement, JobStatus, Resume, StoredTailored } from "@/lib/types";
+import type { CoverStage, Fact, JobRequirement, JobStage, JobStatus, Resume, StoredTailored } from "@/lib/types";
 
 // ---------- BetterAuth tables ----------
 
@@ -103,8 +103,14 @@ export const job = pgTable(
     status: text("status").$type<JobStatus>().notNull().default("not_applied"),
     statusAt: timestamp("status_at"),
     appliedAt: timestamp("applied_at"),
+    // Pipeline progress. DB default is "done" so rows written by older code (which only inserted finished
+    // jobs) read as complete; new inserts set "queued" explicitly.
+    stage: text("stage").$type<JobStage>().notNull().default("done"),
+    error: text("error"),
     coverPrompt: text("cover_prompt").notNull().default(""),
     coverLetter: jsonb("cover_letter").$type<string[]>(),
+    coverStage: text("cover_stage").$type<CoverStage>().notNull().default("idle"),
+    coverError: text("cover_error"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

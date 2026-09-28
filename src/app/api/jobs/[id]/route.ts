@@ -1,8 +1,26 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { job } from "@/db/schema";
-import { userFromRequest } from "@/lib/data";
+import { deleteJob, getJob, userFromRequest } from "@/lib/data";
 import { isJobStatus, StoredTailoredSchema } from "@/lib/types";
+
+export async function GET(request: Request, ctx: RouteContext<"/api/jobs/[id]">) {
+  const user = await userFromRequest(request);
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await ctx.params;
+  const row = await getJob(user.id, id);
+  if (!row) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json(row, { headers: { "Cache-Control": "no-store" } });
+}
+
+// Deleting a job that's still being tailored also cancels it: the pipeline stops at its next write.
+export async function DELETE(request: Request, ctx: RouteContext<"/api/jobs/[id]">) {
+  const user = await userFromRequest(request);
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await ctx.params;
+  if (!(await deleteJob(user.id, id))) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json({ ok: true });
+}
 
 // Save the user's manual edits to a tailored resume.
 export async function PUT(request: Request, ctx: RouteContext<"/api/jobs/[id]">) {

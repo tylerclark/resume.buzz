@@ -1,14 +1,12 @@
-import { db } from "@/db";
-import { job } from "@/db/schema";
-import { extractJob, scoreJob, scrapePosting, tailorResume } from "@/lib/ai";
-import { getBaseResume, getFacts, userFromRequest } from "@/lib/data";
-import { DEFAULT_PROMPT, resumeHash } from "@/lib/types";
+import { getBaseResume, userFromRequest } from "@/lib/data";
+import { startJob } from "@/lib/pipeline";
+import { DEFAULT_PROMPT } from "@/lib/types";
 
+// `after()` work (the pipeline) runs within this route's duration budget.
 export const maxDuration = 300;
 
-export type TailorEvent = { step: number } | { done: string } | { error: string };
-
-// Streams NDJSON progress events so the UI can tick through the four steps.
+// Creates the job and kicks off the pipeline in the background. Responds right away with the id;
+// the client navigates to /j/[id] and polls GET /api/jobs?ids= for progress.
 export async function POST(request: Request) {
   const user = await userFromRequest(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,66 +14,15 @@ export async function POST(request: Request) {
   const { url: rawUrl, prompt } = (await request.json()) as { url?: string; prompt?: string };
   let url: string;
   try {
-    url = new URL(String(rawUrl ?? "").trim()).toString();
+    const u = new URL(String(rawUrl ?? "").trim());
+    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes(".")) throw new Error();
+    url = u.toString();
   } catch {
     return Response.json({ error: "That doesn't look like a URL." }, { status: 400 });
   }
 
-  const [base, facts] = await Promise.all([getBaseResume(user.id), getFacts(user.id)]);
-  if (!base) return Response.json({ error: "Add your base resume first." }, { status: 400 });
+  if (!(await getBaseResume(user.id))) return Response.json({ error: "Add your base resume first." }, { status: 400 });
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (e: TailorEvent) => controller.enqueue(encoder.encode(JSON.stringify(e) + "\n"));
-      try {
-        send({ step: 0 });
-        const markdown = await scrapePosting(url);
-        send({ step: 1 });
-        const details = await extractJob(url, markdown);
-        // Don't score/tailor against an empty page (e.g. a JS app that never finished loading).
-        if (!details.title.trim() || details.description.trim().length < 200) {
-          throw new Error(
-            "Couldn't find a job posting on that page — it may need a login or didn't finish loading. Try the company's direct careers link.",
-          );
-        }
-        send({ step: 2 });
-        const score = await scoreJob(base, details.description, facts);
-        send({ step: 3 });
-        const tailorPrompt = prompt?.trim() || DEFAULT_PROMPT;
-        const tailored = await tailorResume(base, details.description, tailorPrompt, facts);
-
-        const id = crypto.randomUUID();
-        await db.insert(job).values({
-          id,
-          userId: user.id,
-          url,
-          title: details.title,
-          company: details.company,
-          location: details.location,
-          pay: details.pay,
-          employmentType: details.employmentType,
-          level: details.level,
-          score: Math.max(0, Math.min(100, score.score)),
-          scoreNote: score.scoreNote,
-          requirements: score.requirements,
-          keywordsHit: tailored.keywordsHit,
-          keywordsMissing: tailored.keywordsMissing,
-          raw: details.description,
-          prompt: tailorPrompt,
-          tailored,
-          baseHash: resumeHash(base),
-        });
-        send({ step: 4 });
-        send({ done: id });
-      } catch (err) {
-        console.error(err);
-        send({ error: err instanceof Error ? err.message : "Something went wrong." });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" } });
+  const id = await startJob(user.id, url, prompt?.trim() || DEFAULT_PROMPT);
+  return Response.json({ id }, { status: 202 });
 }

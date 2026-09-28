@@ -17,9 +17,23 @@ pnpm dev
 ## Routes
 
 - `/login` — email → 6-digit code
-- `/` — workspace (paste URL, recent jobs)
-- `/j/[id]` — a tailored job: match score, requirements, keywords, diff toggle, prompt, cover letter
-- "Base resume" drawer (header button) — edit base resume, PDF/DOCX import
+- `/` — the "New job" tab (paste URL, recent jobs)
+- `/j/[id]` — a job tab: progress while it tailors, then match score, requirements, keywords, diff toggle, prompt, cover letter
+- "Base resume" drawer (edit button on the resume) — edit base resume, PDF/DOCX import
 - `/https://…` — prefix any posting URL to start tailoring it
+
+## Tabs and background work
+
+Every job is a tab (header bar; `+` opens a new one). Open tabs are kept per browser in localStorage and the
+URL says which one is active, so plain links, bookmarks and the history menu all work.
+
+Tailoring doesn't block the browser: `POST /api/tailor` inserts the job row and returns its id right away, and
+the scrape → extract → score → tailor pipeline runs on the server via `after()` (`src/lib/pipeline.ts`), writing
+each stage to `job.stage`. Re-tailoring and cover letters work the same way (`job.stage` / `job.coverStage`).
+The client polls `GET /api/jobs?ids=` for any open tab that's still working (`src/components/job-status.tsx`),
+so you can start several jobs, switch tabs, reload, or close the browser while they run. Deleting a job
+(`DELETE /api/jobs/[id]`, the Cancel/Discard buttons) also stops its pipeline; a failed job can be retried from
+the step that broke (`POST /api/jobs/[id]/retry`). A pipeline that stops reporting for 5 minutes is shown as
+failed so nothing spins forever.
 
 Schema changes: edit `src/db/schema.ts`, then `pnpm db:generate && pnpm db:migrate`.
