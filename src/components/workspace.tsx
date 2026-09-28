@@ -17,6 +17,7 @@ import {
   type Resume,
   type StoredTailored,
 } from "@/lib/types";
+import { AutoTextarea } from "./auto-textarea";
 import { BaseResumeDrawer } from "./base-resume-drawer";
 import { StatusPicker, StatusPill } from "./status-picker";
 import { Logo } from "./logo";
@@ -98,6 +99,7 @@ export function Workspace({
   const [coverPrompt, setCoverPrompt] = useState(initialJob?.coverPrompt ?? "");
   const [cover, setCover] = useState<string[] | null>(initialJob?.coverLetter ?? null);
   const [coverBusy, setCoverBusy] = useState(false);
+  const [coverDraft, setCoverDraft] = useState<string[] | null>(null); // non-null = editing the letter
 
   const hasJob = !!job;
   const isLoading = phase === "loading";
@@ -109,6 +111,7 @@ export function Workspace({
   }, [job, base]);
   const changes = job?.tailored && model ? countChanges(model) : { total: 0, user: 0 };
   const editing = !!draft;
+  const editingHere = tab === "cover" ? !!coverDraft : editing;
   // Tailored resumes are snapshots; flag when the base has changed since (null = tailored before we tracked it).
   const stale = useMemo(
     () => !!(job?.tailored && base && job.baseHash !== resumeHash(base)),
@@ -234,8 +237,25 @@ export function Workspace({
     setShowDiff(true);
   }
 
+  async function saveCoverDraft() {
+    if (!job || !coverDraft) return;
+    setSavingDraft(true);
+    setError(null);
+    const res = await fetch(`/api/jobs/${job.id}/cover`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coverLetter: coverDraft }),
+    });
+    const body = await res.json();
+    setSavingDraft(false);
+    if (!res.ok) return setError(body.error ?? "Save failed.");
+    setCover(body.coverLetter);
+    setCoverDraft(null);
+  }
+
   async function generateCover() {
     if (!job || coverBusy) return;
+    if (cover && !confirm("Replace the current letter (including any edits) with a new one?")) return;
     setCoverBusy(true);
     setError(null);
     const res = await fetch(`/api/jobs/${job.id}/cover`, {
@@ -437,14 +457,16 @@ export function Workspace({
                 {cover && <span className="w-1.5 h-1.5 rounded-full bg-ok" />}
               </button>
             </div>
-            {tab === "resume" && (
+            {(tab === "resume" || (cover && !coverBusy)) && (
               <button
-                onClick={editing ? undefined : startEditing}
-                title={hasJob ? "Edit this resume" : "Edit base resume"}
-                aria-label={hasJob ? "Edit this resume" : "Edit base resume"}
-                aria-pressed={editing}
+                onClick={
+                  editingHere ? undefined : tab === "cover" ? () => cover && setCoverDraft([...cover]) : startEditing
+                }
+                title={tab === "cover" ? "Edit cover letter" : hasJob ? "Edit this resume" : "Edit base resume"}
+                aria-label={tab === "cover" ? "Edit cover letter" : hasJob ? "Edit this resume" : "Edit base resume"}
+                aria-pressed={editingHere}
                 className={`w-[34px] h-[34px] grid place-items-center rounded-[9px] border cursor-pointer ${
-                  editing
+                  editingHere
                     ? "bg-user-del border-user-mark text-user-ink"
                     : "bg-white border-line-2 text-subtle hover:bg-canvas hover:text-ink"
                 }`}
@@ -467,16 +489,25 @@ export function Workspace({
             )}
             <div className="ml-auto flex gap-2 items-center">
               {!hasJob && <span className="text-[12.5px] text-faint whitespace-nowrap">Showing your base resume</span>}
-              {editing && (
+              {editingHere && (
                 <>
                   {error && <span className="text-[12px] text-bad">{error}</span>}
-                  <button onClick={() => setBaseDrawer(true)} className={`${btnGhost} py-[7px]`}>
-                    Edit base resume
-                  </button>
-                  <button onClick={() => setDraft(null)} className={`${btnGhost} py-[7px]`}>
+                  {tab === "resume" && (
+                    <button onClick={() => setBaseDrawer(true)} className={`${btnGhost} py-[7px]`}>
+                      Edit base resume
+                    </button>
+                  )}
+                  <button
+                    onClick={() => (tab === "cover" ? setCoverDraft(null) : setDraft(null))}
+                    className={`${btnGhost} py-[7px]`}
+                  >
                     Cancel
                   </button>
-                  <button onClick={saveDraft} disabled={savingDraft} className={btnPrimary}>
+                  <button
+                    onClick={tab === "cover" ? saveCoverDraft : saveDraft}
+                    disabled={savingDraft}
+                    className={btnPrimary}
+                  >
                     {savingDraft ? "Saving…" : "Save edits"}
                   </button>
                 </>
@@ -515,7 +546,7 @@ export function Workspace({
                   </button>
                 </>
               )}
-              {!editing && (
+              {!editingHere && (
                 <button
                   onClick={downloadPdf}
                   disabled={!model || (tab === "cover" && !cover)}
@@ -618,40 +649,81 @@ export function Workspace({
 
           {tab === "cover" && job && (
             <div className="flex-1 min-h-0 overflow-y-auto px-8 pt-7 pb-20 flex flex-col items-center gap-4">
-              <div className="w-full max-w-[720px] bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5">
-                <div className="flex justify-between items-baseline">
-                  <div className="font-bold text-[14px]">Cover letter prompt</div>
-                  <span className="text-[12px] text-faint">Optional · nothing is generated until you ask</span>
-                </div>
-                <textarea
-                  value={coverPrompt}
-                  onChange={(e) => setCoverPrompt(e.target.value)}
-                  rows={4}
-                  placeholder="Tell it how to write. Tone, length, what to lead with, anything to avoid…"
-                  className="w-full box-border border border-line-2 rounded-[10px] px-3.5 py-3 text-[13.5px] leading-[1.55] resize-y text-ink bg-field"
-                />
-                <div className="flex gap-1.5 flex-wrap items-center">
-                  {COVER_CHIPS.map((label) => (
+              {!coverDraft && (
+                <div className="w-full max-w-[720px] bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5">
+                  <div className="flex justify-between items-baseline">
+                    <div className="font-bold text-[14px]">Cover letter prompt</div>
+                    <span className="text-[12px] text-faint">Optional · nothing is generated until you ask</span>
+                  </div>
+                  <textarea
+                    value={coverPrompt}
+                    onChange={(e) => setCoverPrompt(e.target.value)}
+                    rows={4}
+                    placeholder="Tell it how to write. Tone, length, what to lead with, anything to avoid…"
+                    className="w-full box-border border border-line-2 rounded-[10px] px-3.5 py-3 text-[13.5px] leading-[1.55] resize-y text-ink bg-field"
+                  />
+                  <div className="flex gap-1.5 flex-wrap items-center">
+                    {COVER_CHIPS.map((label) => (
+                      <button
+                        key={label}
+                        onClick={() => setCoverPrompt((p) => (p ? p.replace(/\s*$/, "") + " " : "") + label + ".")}
+                        className="bg-canvas border border-line rounded-full px-2.5 py-[5px] text-[12px] font-semibold text-muted cursor-pointer hover:border-brand hover:text-brand"
+                      >
+                        + {label}
+                      </button>
+                    ))}
                     <button
-                      key={label}
-                      onClick={() => setCoverPrompt((p) => (p ? p.replace(/\s*$/, "") + " " : "") + label + ".")}
-                      className="bg-canvas border border-line rounded-full px-2.5 py-[5px] text-[12px] font-semibold text-muted cursor-pointer hover:border-brand hover:text-brand"
+                      onClick={generateCover}
+                      disabled={coverBusy}
+                      className={`${btnPrimary} ml-auto px-4 py-[9px]`}
                     >
-                      + {label}
+                      {coverBusy ? "Writing…" : cover ? "Regenerate" : "Generate cover letter"}
                     </button>
-                  ))}
-                  <button
-                    onClick={generateCover}
-                    disabled={coverBusy}
-                    className={`${btnPrimary} ml-auto px-4 py-[9px]`}
-                  >
-                    {coverBusy ? "Writing…" : cover ? "Regenerate" : "Generate cover letter"}
-                  </button>
+                  </div>
+                  {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
                 </div>
-                {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
-              </div>
+              )}
 
-              {coverBusy ? (
+              {coverDraft ? (
+                <article className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 text-[14.5px] leading-[1.7] shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)] outline-2 outline-dashed outline-user-mark outline-offset-4">
+                  <div className="font-sans text-[12.5px] text-muted mb-6">
+                    {[base?.name, base?.contact].filter(Boolean).join(" · ")}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {coverDraft.map((p, i) => (
+                      <div key={i} className="flex gap-2 items-start">
+                        <AutoTextarea
+                          value={p}
+                          onChange={(e) =>
+                            setCoverDraft(
+                              (d) => d && d.map((x, j) => (j === i ? e.target.value.replace(/\n+/g, " ") : x)),
+                            )
+                          }
+                          className="flex-1 box-border border border-transparent hover:border-line focus:border-line rounded-md px-2 py-1 -mx-2 text-[14.5px] leading-[1.7] resize-none overflow-hidden bg-transparent focus:bg-field font-serif text-ink-2"
+                        />
+                        <button
+                          onClick={() => setCoverDraft((d) => d && d.filter((_, j) => j !== i))}
+                          title="Remove paragraph"
+                          className="bg-transparent border-0 p-0 pt-2 text-faint text-[16px] cursor-pointer hover:text-bad"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCoverDraft((d) => d && [...d, ""])}
+                    className="bg-transparent border-0 p-0 mt-2 text-brand text-[12.5px] font-semibold font-sans cursor-pointer"
+                  >
+                    + Add paragraph
+                  </button>
+                  <p className="mt-5 mb-0">
+                    Warmly,
+                    <br />
+                    {base?.name}
+                  </p>
+                </article>
+              ) : coverBusy ? (
                 <div className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border flex flex-col gap-3">
                   {[92, 100, 96, 60, 100, 88, 40].map((w, i) => (
                     <div

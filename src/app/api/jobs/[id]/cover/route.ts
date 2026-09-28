@@ -28,3 +28,23 @@ export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]/c
     return Response.json({ error: err instanceof Error ? err.message : "Cover letter failed." }, { status: 500 });
   }
 }
+
+// Save the user's edits to a generated letter.
+export async function PUT(request: Request, ctx: RouteContext<"/api/jobs/[id]/cover">) {
+  const user = await userFromRequest(request);
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await ctx.params;
+
+  const { coverLetter } = (await request.json()) as { coverLetter?: unknown };
+  if (!Array.isArray(coverLetter) || !coverLetter.every((p) => typeof p === "string"))
+    return Response.json({ error: "Invalid letter" }, { status: 400 });
+
+  const paragraphs = coverLetter.map((p) => p.trim()).filter(Boolean);
+  const [updated] = await db
+    .update(job)
+    .set({ coverLetter: paragraphs, updatedAt: new Date() })
+    .where(and(eq(job.id, id), eq(job.userId, user.id)))
+    .returning({ coverLetter: job.coverLetter });
+  if (!updated) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json(updated);
+}
