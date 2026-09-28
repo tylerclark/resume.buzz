@@ -14,6 +14,9 @@ updates:
       # eslint-config-next 16 pins eslint-plugin-react 7, which crashes on eslint 10.
       - dependency-name: eslint
         update-types: [version-update:semver-major]
+      # Types track the Node major in .node-version; bump both together by hand.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /
     schedule:
