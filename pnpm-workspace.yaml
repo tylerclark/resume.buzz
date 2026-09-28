@@ -3,3 +3,8 @@ allowBuilds:
   esbuild: true
   sharp: false
   unrs-resolver: false
+
+# GHSA-67mh-4wv8-2f99: drizzle-kit's legacy @esbuild-kit loader pins esbuild 0.18. Nothing here uses it,
+# but the advisory needs >=0.25, which the loader works with.
+overrides:
+  esbuild@<0.25.0: '>=0.25.0'
