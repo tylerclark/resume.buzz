@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { job, type Job } from "@/db/schema";
 import { extractJob, scoreJob, scrapePosting, tailorResume, writeCoverLetter } from "./ai";
 import { getBaseResume, getFacts } from "./data";
-import { DEFAULT_PROMPT, resumeHash, type JobStage } from "./types";
+import { DEFAULT_PROMPT, finalResume, resumeHash, type JobStage } from "./types";
 
 // The tailoring pipeline runs on the server *after* the request that kicked it off has returned, so the
 // user can open other tabs, refresh, or close the browser while it works. Every stage transition is
@@ -40,7 +40,7 @@ async function fail(id: string, userId: string, err: unknown) {
 // Runs the pipeline from `from` onward for an existing row. Each step persists its own results so a
 // retry can resume, and the tab shows the title as soon as it's known.
 async function run(id: string, userId: string, from: JobStage) {
-  const order: JobStage[] = ["scraping", "extracting", "scoring", "tailoring"];
+  const order: JobStage[] = ["scraping", "extracting", "scoring", "tailoring", "rescoring"];
   const startAt = Math.max(0, order.indexOf(from));
   try {
     const [row, base, facts] = await Promise.all([
@@ -90,11 +90,19 @@ async function run(id: string, userId: string, from: JobStage) {
     }
 
     const tailored = await tailorResume(base, description, row.prompt || DEFAULT_PROMPT, facts);
-    await advance(id, userId, "done", {
+    await advance(id, userId, "rescoring", {
       tailored,
       baseHash: resumeHash(base),
       keywordsHit: tailored.keywordsHit,
       keywordsMissing: tailored.keywordsMissing,
+    });
+
+    // Score the resume we actually produced, so the panel can show before → after.
+    const after = await scoreJob({ ...base, ...finalResume(tailored) }, description, facts);
+    await advance(id, userId, "done", {
+      tailoredScore: Math.max(0, Math.min(100, after.score)),
+      tailoredScoreNote: after.scoreNote,
+      tailoredRequirements: after.requirements,
       error: null,
     });
   } catch (err) {

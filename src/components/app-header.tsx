@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { JOB_STAGES, stageInFlight } from "@/lib/types";
-import { isBusy, useJobStatuses, type JobStatus } from "./job-status";
+import { isBusy, shownScore, useJobStatuses, type JobStatus } from "./job-status";
 import { Logo } from "./logo";
 import { confirmLeave, hrefForTab, NEW_TAB, tabIdForPath, useTabs } from "./tabs-store";
 
@@ -180,7 +180,7 @@ function TabChip({
       </Link>
       {!isNew && status && !busy && !failed && (
         <span className="flex-none text-[10.5px] font-bold text-ok-ink bg-ok-bg px-1.5 py-px rounded-full group-hover:hidden">
-          {status.score}%
+          {shownScore(status)}%
         </span>
       )}
       <button

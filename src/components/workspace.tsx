@@ -22,7 +22,7 @@ import {
 import { hostOf, Spinner } from "./app-header";
 import { AutoTextarea } from "./auto-textarea";
 import { BaseResumeDrawer } from "./base-resume-drawer";
-import { toStatus, useJobStatus, useJobStatusActions } from "./job-status";
+import { shownScore, toStatus, useJobStatus, useJobStatusActions } from "./job-status";
 import { StatusPicker, StatusPill } from "./status-picker";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
 import { confirmLeave, NEW_TAB, useLeaveGuard, useTabs } from "./tabs-store";
@@ -211,11 +211,11 @@ export function Workspace({
   }
 
   // "I do have this experience": remember it for every job, then re-tailor this one with it.
-  async function addFact(keyword: string, detail: string) {
+  async function addFacts(facts: { keyword: string; detail: string }[]) {
     const res = await fetch("/api/facts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyword, detail }),
+      body: JSON.stringify({ facts }),
     });
     if (!res.ok) {
       setError((await res.json().catch(() => ({}))).error ?? "Couldn't save that.");
@@ -472,7 +472,7 @@ export function Workspace({
           )}
 
           {job && !!job.scoreNote && (
-            <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} onAddFact={addFact} busy={inFlight} />
+            <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} onAddFacts={addFacts} busy={inFlight} />
           )}
         </div>
       </aside>
@@ -937,7 +937,9 @@ function JobRow({
         !failed &&
         (readOnly ? <StatusPill status={h.status} /> : <StatusPicker key={h.status} jobId={h.id} status={h.status} />)}
       {!working && !failed && (
-        <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">{live.score}%</div>
+        <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
+          {shownScore(live)}%
+        </div>
       )}
     </div>
   );
@@ -1003,19 +1005,29 @@ function JobPanel({
   job,
   rawOpen,
   setRawOpen,
-  onAddFact,
+  onAddFacts,
   busy,
 }: {
   job: Job;
   rawOpen: boolean;
   setRawOpen: (v: boolean) => void;
-  onAddFact: (keyword: string, detail: string) => Promise<boolean>;
+  onAddFacts: (facts: { keyword: string; detail: string }[]) => Promise<boolean>;
   busy: boolean;
 }) {
-  const [adding, setAdding] = useState<string | null>(null);
-  const [detail, setDetail] = useState("");
+  // Missing keywords the user has picked, in click order, with what they typed for each.
+  const [picked, setPicked] = useState<string[]>([]);
+  const [details, setDetails] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const pills = [job.pay, job.employmentType, job.level].filter(Boolean);
+  const requirements = job.tailoredRequirements ?? job.requirements;
+  const after = job.tailoredScore;
+  const delta = after === null ? 0 : after - job.score;
+  const ring = after ?? job.score;
+
+  function toggle(k: string) {
+    setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
+  }
+  const ready = picked.length > 0 && picked.every((k) => details[k]?.trim());
   const reqStyle = {
     hit: { glyph: "✓", bg: "#e6f7ee", fg: "#158a48" },
     partial: { glyph: "~", bg: "#fff4dd", fg: "#a56a00" },
@@ -1050,23 +1062,45 @@ function JobPanel({
       <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex gap-4 items-center">
         <div
           className="relative w-16 h-16 flex-none rounded-full grid place-items-center"
-          style={{ background: `conic-gradient(#22b55e ${Math.round(job.score * 3.6)}deg, #e6ebf5 0)` }}
+          style={{
+            // Base score in muted green, the tailored gain layered on top in brand blue.
+            background:
+              after !== null && delta > 0
+                ? `conic-gradient(#22b55e ${Math.round(job.score * 3.6)}deg, #1a6fe8 ${Math.round(job.score * 3.6)}deg ${Math.round(after * 3.6)}deg, #e6ebf5 0)`
+                : `conic-gradient(#22b55e ${Math.round(ring * 3.6)}deg, #e6ebf5 0)`,
+          }}
         >
           <div className="w-[50px] h-[50px] rounded-full bg-white grid place-items-center font-extrabold text-[16px]">
-            {job.score}
+            {ring}
           </div>
         </div>
-        <div className="flex-1">
-          <div className="font-bold text-[14px]">Match score</div>
-          <div className="text-[12.5px] text-subtle leading-[1.45]">{job.scoreNote}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <div className="font-bold text-[14px]">{after !== null ? "Tailored match" : "Match score"}</div>
+            {after !== null && (
+              <span
+                className={`text-[11.5px] font-bold px-1.5 py-px rounded-full ${
+                  delta > 0
+                    ? "bg-brand-tint text-brand"
+                    : delta < 0
+                      ? "bg-bad-bg text-bad"
+                      : "bg-well text-subtle"
+                }`}
+                title="Change from your base resume's score"
+              >
+                {delta > 0 ? `+${delta}` : delta === 0 ? "±0" : delta} vs base ({job.score})
+              </span>
+            )}
+          </div>
+          <div className="text-[12.5px] text-subtle leading-[1.45]">{job.tailoredScoreNote ?? job.scoreNote}</div>
         </div>
       </div>
 
-      {job.requirements.length > 0 && (
+      {requirements.length > 0 && (
         <section className="flex flex-col gap-2">
           <h3 className="m-0 eyebrow">Key requirements</h3>
           <ul className="list-none m-0 p-0 flex flex-col gap-1.5">
-            {job.requirements.map((r, i) => {
+            {requirements.map((r, i) => {
               const s = reqStyle[r.status];
               return (
                 <li
@@ -1096,61 +1130,97 @@ function JobPanel({
               {k}
             </span>
           ))}
-          {job.keywordsMissing.map((k) => (
-            <button
-              key={k}
-              onClick={() => {
-                setAdding(adding === k ? null : k);
-                setDetail("");
-              }}
-              title="I have this experience"
-              className={`text-[12px] font-semibold border border-dashed px-2 py-[3px] rounded-md cursor-pointer ${
-                adding === k
-                  ? "bg-bad-bg text-bad border-bad"
-                  : "bg-white text-bad border-[#e4b2b2] hover:border-bad hover:bg-bad-bg"
-              }`}
-            >
-              {k}
-            </button>
-          ))}
+          {job.keywordsMissing.map((k) => {
+            const on = picked.includes(k);
+            return (
+              <button
+                key={k}
+                onClick={() => toggle(k)}
+                aria-pressed={on}
+                title={on ? "Remove from the list" : "I have this experience"}
+                className={`text-[12px] font-semibold border border-dashed px-2 py-[3px] rounded-md cursor-pointer ${
+                  on
+                    ? "bg-bad-bg text-bad border-bad"
+                    : "bg-white text-bad border-[#e4b2b2] hover:border-bad hover:bg-bad-bg"
+                }`}
+              >
+                {on ? "✓ " : ""}
+                {k}
+              </button>
+            );
+          })}
         </div>
-        {adding && (
+        {picked.length > 0 && (
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (!ready) return;
               setSaving(true);
-              const ok = await onAddFact(adding, detail);
+              const ok = await onAddFacts(picked.map((k) => ({ keyword: k, detail: details[k].trim() })));
               setSaving(false);
-              if (ok) setAdding(null);
+              if (ok) {
+                setPicked([]);
+                setDetails({});
+              }
             }}
-            className="bg-white border border-line-2 rounded-[12px] p-3.5 flex flex-col gap-2"
+            className="bg-white border border-line-2 rounded-[12px] p-3.5 flex flex-col gap-3"
           >
-            <div className="text-[13px] font-bold">Where have you used {adding}?</div>
-            <textarea
-              autoFocus
-              required
-              rows={2}
-              value={detail}
-              onChange={(e) => setDetail(e.target.value)}
-              placeholder={`e.g. Led ${adding} work at Salesforce, 2016 to 2020`}
-              className="w-full box-border border border-line-2 rounded-[10px] px-3 py-2 text-[13px] leading-normal resize-y text-ink bg-field"
-            />
+            {picked.map((k, i) => (
+              <div key={k} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <label htmlFor={`fact-${i}`} className="text-[13px] font-bold flex-1">
+                    Where have you used {k}?
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => toggle(k)}
+                    title={`Remove ${k}`}
+                    aria-label={`Remove ${k}`}
+                    className="bg-transparent border-0 text-faint text-[16px] leading-none cursor-pointer hover:text-bad"
+                  >
+                    ×
+                  </button>
+                </div>
+                <textarea
+                  id={`fact-${i}`}
+                  autoFocus={i === picked.length - 1}
+                  required
+                  rows={2}
+                  value={details[k] ?? ""}
+                  onChange={(e) => setDetails((d) => ({ ...d, [k]: e.target.value }))}
+                  placeholder={`e.g. Led ${k} work at Salesforce, 2016 to 2020`}
+                  className="w-full box-border border border-line-2 rounded-[10px] px-3 py-2 text-[13px] leading-normal resize-y text-ink bg-field"
+                />
+              </div>
+            ))}
             <div className="text-[11.5px] text-faint">
-              Saved to your profile so every tailored resume can use it. Name the employer so it lands in the right
-              place.
+              Saved to your profile so every tailored resume can use them. Name the employer so each lands in the
+              right place. Pick more keywords above to add them to this list.
             </div>
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setAdding(null)} className={btnGhost}>
+              <button
+                type="button"
+                onClick={() => {
+                  setPicked([]);
+                  setDetails({});
+                }}
+                className={btnGhost}
+              >
                 Cancel
               </button>
-              <button type="submit" disabled={saving || busy || !detail.trim()} className={btnPrimary}>
-                {saving || busy ? "Re-tailoring…" : "Add & re-tailor"}
+              <button type="submit" disabled={saving || busy || !ready} className={btnPrimary}>
+                {saving || busy
+                  ? "Re-tailoring…"
+                  : picked.length > 1
+                    ? `Add ${picked.length} & re-tailor`
+                    : "Add & re-tailor"}
               </button>
             </div>
           </form>
         )}
         <div className="text-[12px] text-faint">
-          Green = in your tailored resume · red = not in your resume yet. Click one you actually have to add it.
+          Green = in your tailored resume · red = not in your resume yet. Click the ones you actually have, then add
+          them all at once.
         </div>
       </section>
       )}

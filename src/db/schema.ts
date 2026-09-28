@@ -90,9 +90,14 @@ export const job = pgTable(
     pay: text("pay").notNull().default(""),
     employmentType: text("employment_type").notNull().default(""),
     level: text("level").notNull().default(""),
+    // Fit of the *base* resume (plus confirmed facts) to the posting: the "before" number. Never updated.
     score: integer("score").notNull().default(0),
     scoreNote: text("score_note").notNull().default(""),
     requirements: jsonb("requirements").$type<JobRequirement[]>().notNull().default([]),
+    // Fit of the tailored resume: the "after" number, refreshed every time tailoring runs.
+    tailoredScore: integer("tailored_score"),
+    tailoredScoreNote: text("tailored_score_note"),
+    tailoredRequirements: jsonb("tailored_requirements").$type<JobRequirement[]>(),
     keywordsHit: jsonb("keywords_hit").$type<string[]>().notNull().default([]),
     keywordsMissing: jsonb("keywords_missing").$type<string[]>().notNull().default([]),
     raw: text("raw").notNull(),

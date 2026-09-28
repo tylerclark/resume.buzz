@@ -36,4 +36,12 @@ so you can start several jobs, switch tabs, reload, or close the browser while t
 the step that broke (`POST /api/jobs/[id]/retry`). A pipeline that stops reporting for 5 minutes is shown as
 failed so nothing spins forever.
 
+## Scores and missing keywords
+
+`job.score` is the base resume's fit to the posting and never changes; `job.tailoredScore` is re-computed after
+every tailoring run (the `rescoring` stage scores the resume that was actually produced), so the panel and tab
+show the tailored number with the change from the base. Missing keywords are multi-select: pick every one you
+actually have, describe each, and "Add & re-tailor" saves them all to your profile (`POST /api/facts` with
+`{ facts: [...] }`) and re-tailors once.
+
 Schema changes: edit `src/db/schema.ts`, then `pnpm db:generate && pnpm db:migrate`.

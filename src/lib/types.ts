@@ -122,12 +122,19 @@ export const JOB_STAGES = {
   extracting: { label: "Extracting the job", sub: "Title, company, pay, requirements, keywords" },
   scoring: { label: "Scoring against your base resume", sub: "What already matches, what doesn't" },
   tailoring: { label: "Tailoring", sub: "Small, truthful edits to wording, order and emphasis" },
+  rescoring: { label: "Scoring the tailored resume", sub: "How much closer it gets you" },
   done: { label: "Done", sub: "" },
   failed: { label: "Failed", sub: "" },
 } as const;
 export type JobStage = keyof typeof JOB_STAGES;
 // The steps shown in the progress card, in order.
-export const PIPELINE_STEPS = ["scraping", "extracting", "scoring", "tailoring"] as const satisfies JobStage[];
+export const PIPELINE_STEPS = [
+  "scraping",
+  "extracting",
+  "scoring",
+  "tailoring",
+  "rescoring",
+] as const satisfies JobStage[];
 export const isJobStage = (s: unknown): s is JobStage => typeof s === "string" && s in JOB_STAGES;
 export const stageInFlight = (s: JobStage) => s !== "done" && s !== "failed";
 

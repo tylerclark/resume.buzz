@@ -78,6 +78,7 @@ const summaryColumns = {
   title: job.title,
   company: job.company,
   score: job.score,
+  tailoredScore: job.tailoredScore,
   status: job.status,
   stage: job.stage,
   error: job.error,

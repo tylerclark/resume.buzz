@@ -36,6 +36,13 @@
       "when": 1790620618019,
       "tag": "0004_cool_echo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790621735983,
+      "tag": "0005_daffy_korg",
+      "breakpoints": true
     }
   ]
 }

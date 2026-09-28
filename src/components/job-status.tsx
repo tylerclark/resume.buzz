@@ -14,6 +14,7 @@ export type JobStatus = {
   title: string;
   company: string;
   score: number;
+  tailoredScore: number | null;
   status: JobSummary["status"];
   stage: JobStage;
   error: string | null;
@@ -24,6 +25,9 @@ export type JobStatus = {
   /** The server no longer has this job (deleted, or a stale id in localStorage). */
   missing?: boolean;
 };
+
+/** The number to show for a job: the tailored resume's fit when we have it, else the base resume's. */
+export const shownScore = (s: Pick<JobStatus, "score" | "tailoredScore">) => s.tailoredScore ?? s.score;
 
 export const isBusy = (s: Pick<JobStatus, "stage" | "coverStage"> | undefined) =>
   !!s && (stageInFlight(s.stage) || s.coverStage === "writing");
@@ -149,6 +153,7 @@ function sameStatus(a: JobStatus | undefined, b: JobStatus) {
     a.status === b.status &&
     a.title === b.title &&
     a.score === b.score &&
+    a.tailoredScore === b.tailoredScore &&
     a.hasCover === b.hasCover
   );
 }
@@ -160,6 +165,7 @@ function blank(id: string): JobStatus {
     title: "",
     company: "",
     score: 0,
+    tailoredScore: null,
     status: "not_applied",
     stage: "failed",
     error: null,
@@ -205,6 +211,7 @@ export function toStatus(j: {
   title: string;
   company: string;
   score: number;
+  tailoredScore: number | null;
   status: JobSummary["status"];
   stage: JobStage;
   error: string | null;
@@ -220,6 +227,7 @@ export function toStatus(j: {
     title: j.title,
     company: j.company,
     score: j.score,
+    tailoredScore: j.tailoredScore,
     status: j.status,
     stage: j.stage,
     error: j.error,

@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <main className="min-h-screen grid place-items-center px-4">
       <div className="w-full max-w-[380px] flex flex-col gap-6">
         <div className="flex justify-center">
-          <Logo height={36} priority />
+          <Logo variant="stacked" height={190} priority />
         </div>
         <div className="bg-white border border-line-2 rounded-[14px] p-6 flex flex-col gap-4">
           <div>
