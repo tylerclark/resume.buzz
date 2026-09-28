@@ -836,13 +836,16 @@ function ResumeSkeleton({ name, contact }: { name?: string; contact?: string }) 
     [{ role: false, bullets: [80] }],
   ];
   let i = 0;
-  const bar = (w: number | string, h = "h-3", extra = "") => (
-    <div
-      key={i}
-      className={`${h} rounded-md bg-[#e6ebf5] animate-pulse-soft ${extra}`}
-      style={{ width: typeof w === "number" ? `${w}%` : w, animationDelay: `${(i++ % 12) * 0.1}s` }}
-    />
-  );
+  const bar = (w: number | string, h = "h-3") => {
+    const n = i++;
+    return (
+      <div
+        key={n}
+        className={`${h} rounded-md bg-[#e6ebf5] animate-pulse-soft`}
+        style={{ width: typeof w === "number" ? `${w}%` : w, animationDelay: `${(n % 12) * 0.1}s` }}
+      />
+    );
+  };
   return (
     <article
       aria-busy="true"
@@ -860,7 +863,7 @@ function ResumeSkeleton({ name, contact }: { name?: string; contact?: string }) 
       </header>
       {sections.map((entries, si) => (
         <section key={si} className="mb-6 flex flex-col gap-3">
-          {bar(88, "h-2.5", "!w-24 mb-1")}
+          {bar("96px", "h-2.5")}
           {entries.map((e, ei) => (
             <div key={ei} className="flex flex-col gap-2">
               {e.role && (
