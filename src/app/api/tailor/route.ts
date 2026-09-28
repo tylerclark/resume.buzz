@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { job } from "@/db/schema";
 import { extractJob, scoreJob, scrapePosting, tailorResume } from "@/lib/ai";
-import { getBaseResume, userFromRequest } from "@/lib/data";
+import { getBaseResume, getFacts, userFromRequest } from "@/lib/data";
 import { DEFAULT_PROMPT, resumeHash } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "That doesn't look like a URL." }, { status: 400 });
   }
 
-  const base = await getBaseResume(user.id);
+  const [base, facts] = await Promise.all([getBaseResume(user.id), getFacts(user.id)]);
   if (!base) return Response.json({ error: "Add your base resume first." }, { status: 400 });
 
   const encoder = new TextEncoder();
@@ -40,10 +40,10 @@ export async function POST(request: Request) {
           );
         }
         send({ step: 2 });
-        const score = await scoreJob(base, details.description);
+        const score = await scoreJob(base, details.description, facts);
         send({ step: 3 });
         const tailorPrompt = prompt?.trim() || DEFAULT_PROMPT;
-        const tailored = await tailorResume(base, details.description, tailorPrompt);
+        const tailored = await tailorResume(base, details.description, tailorPrompt, facts);
 
         const id = crypto.randomUUID();
         await db.insert(job).values({

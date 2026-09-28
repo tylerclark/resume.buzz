@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { EMPTY_RESUME, type Entry, type Resume } from "@/lib/types";
+import { EMPTY_RESUME, type Entry, type Fact, type Resume } from "@/lib/types";
 import { AutoTextarea } from "./auto-textarea";
 
 const card = "bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5";
@@ -62,7 +62,85 @@ function MoveButtons({
   );
 }
 
-export function BaseResumeDrawer({ initial, onClose }: { initial: Resume | null; onClose: () => void }) {
+// Saved independently of the editor's Save button: these apply immediately.
+function FactsCard({ facts }: { facts: Fact[] }) {
+  const router = useRouter();
+  const [keyword, setKeyword] = useState("");
+  const [detail, setDetail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function call(init: RequestInit, query = "") {
+    setBusy(true);
+    await fetch(`/api/facts${query}`, init);
+    setBusy(false);
+    router.refresh();
+  }
+
+  return (
+    <section className={card}>
+      <div>
+        <div className="eyebrow text-ink">Additional experience</div>
+        <div className="text-[12.5px] text-subtle mt-1">
+          Things you&apos;ve done that aren&apos;t written above. Tailoring works them in when a job asks for them.
+        </div>
+      </div>
+      {facts.map((f) => (
+        <div key={f.id} className="flex gap-3 items-start border-t border-line pt-2.5">
+          <div className="flex-1 text-[13px] leading-normal">
+            <span className="font-bold">{f.keyword}</span>
+            <span className="text-muted"> · {f.detail}</span>
+          </div>
+          <button
+            onClick={() => call({ method: "DELETE" }, `?id=${encodeURIComponent(f.id)}`)}
+            disabled={busy}
+            className="bg-transparent border-0 text-faint text-[16px] cursor-pointer hover:text-bad"
+            title="Remove"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          await call({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ keyword, detail }),
+          });
+          setKeyword("");
+          setDetail("");
+        }}
+        className="grid grid-cols-[200px_1fr_auto] gap-2 items-end border-t border-line pt-3"
+      >
+        <Field label="Skill / keyword">
+          <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="SOC 2" className={small} />
+        </Field>
+        <Field label="Where and how">
+          <input
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            placeholder="Led SOC 2 Type II audit prep at Salesforce"
+            className={small}
+          />
+        </Field>
+        <button type="submit" disabled={busy || !keyword.trim() || !detail.trim()} className={ghost}>
+          Add
+        </button>
+      </form>
+    </section>
+  );
+}
+
+export function BaseResumeDrawer({
+  initial,
+  facts,
+  onClose,
+}: {
+  initial: Resume | null;
+  facts: Fact[];
+  onClose: () => void;
+}) {
   const router = useRouter();
   const isNew = !initial;
   const [r, setR] = useState<Resume>(() => initial ?? structuredClone(EMPTY_RESUME));
@@ -326,6 +404,8 @@ export function BaseResumeDrawer({ initial, onClose }: { initial: Resume | null;
           >
             + Add section
           </button>
+
+          {!isNew && <FactsCard facts={facts} />}
         </main>
       </div>
     </>

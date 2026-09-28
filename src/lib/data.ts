@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { baseResume, job, type Job } from "@/db/schema";
 import { auth } from "./auth";
-import type { Resume } from "./types";
+import type { Fact, Resume } from "./types";
 
 export async function userFromRequest(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -15,6 +15,20 @@ export async function getBaseResume(userId: string): Promise<Resume | null> {
   return row?.data ?? null;
 }
 
+export async function getFacts(userId: string): Promise<Fact[]> {
+  const [row] = await db.select({ facts: baseResume.facts }).from(baseResume).where(eq(baseResume.userId, userId));
+  return row?.facts ?? [];
+}
+
+export async function setFacts(userId: string, facts: Fact[]) {
+  const [row] = await db
+    .update(baseResume)
+    .set({ facts })
+    .where(eq(baseResume.userId, userId))
+    .returning({ facts: baseResume.facts });
+  return row?.facts ?? null;
+}
+
 export async function saveBaseResume(userId: string, data: Resume) {
   await db
     .insert(baseResume)
@@ -23,7 +37,10 @@ export async function saveBaseResume(userId: string, data: Resume) {
 }
 
 export async function getJob(userId: string, id: string): Promise<Job | null> {
-  const [row] = await db.select().from(job).where(and(eq(job.id, id), eq(job.userId, userId)));
+  const [row] = await db
+    .select()
+    .from(job)
+    .where(and(eq(job.id, id), eq(job.userId, userId)));
   return row ?? null;
 }
 

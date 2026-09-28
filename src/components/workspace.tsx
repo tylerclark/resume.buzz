@@ -8,7 +8,7 @@ import type { Job } from "@/db/schema";
 import { alignToBase } from "@/lib/align";
 import { authClient } from "@/lib/auth-client";
 import type { JobSummary } from "@/lib/data";
-import { DEFAULT_PROMPT, hasUserEdits, resumeHash, type Resume, type StoredTailored } from "@/lib/types";
+import { DEFAULT_PROMPT, hasUserEdits, resumeHash, type Fact, type Resume, type StoredTailored } from "@/lib/types";
 import { BaseResumeDrawer } from "./base-resume-drawer";
 import { Logo } from "./logo";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
@@ -57,12 +57,14 @@ function when(d: Date) {
 export function Workspace({
   user,
   base,
+  facts,
   history,
   job: initialJob,
   autoUrl,
 }: {
   user: { name: string; email: string };
   base: Resume | null;
+  facts: Fact[];
   history: JobSummary[];
   job: Job | null;
   autoUrl?: string;
@@ -151,6 +153,22 @@ export function Workspace({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // "I do have this experience": remember it for every job, then re-tailor this one with it.
+  async function addFact(keyword: string, detail: string) {
+    const res = await fetch("/api/facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword, detail }),
+    });
+    if (!res.ok) {
+      setError((await res.json().catch(() => ({}))).error ?? "Couldn't save that.");
+      return false;
+    }
+    router.refresh();
+    await regenerate();
+    return true;
+  }
 
   async function regenerate() {
     if (!job || regen) return;
@@ -403,7 +421,7 @@ export function Workspace({
               </>
             )}
 
-            {job && <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} />}
+            {job && <JobPanel job={job} rawOpen={rawOpen} setRawOpen={setRawOpen} onAddFact={addFact} busy={regen} />}
           </div>
         </aside>
 
@@ -682,7 +700,7 @@ export function Workspace({
         </section>
       </div>
 
-      {baseDrawer && <BaseResumeDrawer initial={base} onClose={() => setBaseDrawer(false)} />}
+      {baseDrawer && <BaseResumeDrawer initial={base} facts={facts} onClose={() => setBaseDrawer(false)} />}
     </div>
   );
 }
@@ -792,7 +810,22 @@ function UserMenu({ user }: { user: { name: string; email: string } }) {
   );
 }
 
-function JobPanel({ job, rawOpen, setRawOpen }: { job: Job; rawOpen: boolean; setRawOpen: (v: boolean) => void }) {
+function JobPanel({
+  job,
+  rawOpen,
+  setRawOpen,
+  onAddFact,
+  busy,
+}: {
+  job: Job;
+  rawOpen: boolean;
+  setRawOpen: (v: boolean) => void;
+  onAddFact: (keyword: string, detail: string) => Promise<boolean>;
+  busy: boolean;
+}) {
+  const [adding, setAdding] = useState<string | null>(null);
+  const [detail, setDetail] = useState("");
+  const [saving, setSaving] = useState(false);
   const pills = [job.pay, job.employmentType, job.level].filter(Boolean);
   const reqStyle = {
     hit: { glyph: "✓", bg: "#e6f7ee", fg: "#158a48" },
@@ -874,16 +907,60 @@ function JobPanel({ job, rawOpen, setRawOpen }: { job: Job; rawOpen: boolean; se
             </span>
           ))}
           {job.keywordsMissing.map((k) => (
-            <span
+            <button
               key={k}
-              className="text-[12px] font-semibold bg-white text-bad border border-dashed border-[#e4b2b2] px-2 py-[3px] rounded-md"
+              onClick={() => {
+                setAdding(adding === k ? null : k);
+                setDetail("");
+              }}
+              title="I have this experience"
+              className={`text-[12px] font-semibold border border-dashed px-2 py-[3px] rounded-md cursor-pointer ${
+                adding === k
+                  ? "bg-bad-bg text-bad border-bad"
+                  : "bg-white text-bad border-[#e4b2b2] hover:border-bad hover:bg-bad-bg"
+              }`}
             >
               {k}
-            </span>
+            </button>
           ))}
         </div>
+        {adding && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setSaving(true);
+              const ok = await onAddFact(adding, detail);
+              setSaving(false);
+              if (ok) setAdding(null);
+            }}
+            className="bg-white border border-line-2 rounded-[12px] p-3.5 flex flex-col gap-2"
+          >
+            <div className="text-[13px] font-bold">Where have you used {adding}?</div>
+            <textarea
+              autoFocus
+              required
+              rows={2}
+              value={detail}
+              onChange={(e) => setDetail(e.target.value)}
+              placeholder={`e.g. Led ${adding} work at Salesforce, 2016 to 2020`}
+              className="w-full box-border border border-line-2 rounded-[10px] px-3 py-2 text-[13px] leading-normal resize-y text-ink bg-field"
+            />
+            <div className="text-[11.5px] text-faint">
+              Saved to your profile so every tailored resume can use it. Name the employer so it lands in the right
+              place.
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setAdding(null)} className={btnGhost}>
+                Cancel
+              </button>
+              <button type="submit" disabled={saving || busy || !detail.trim()} className={btnPrimary}>
+                {saving || busy ? "Re-tailoring…" : "Add & re-tailor"}
+              </button>
+            </div>
+          </form>
+        )}
         <div className="text-[12px] text-faint">
-          Green = in your tailored resume · red = still missing (we won&apos;t invent experience)
+          Green = in your tailored resume · red = not in your resume yet. Click one you actually have to add it.
         </div>
       </section>
 

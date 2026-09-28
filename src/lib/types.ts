@@ -99,6 +99,10 @@ export const JobScoreSchema = z.object({
   requirements: z.array(JobRequirementSchema).describe("The 4–7 key requirements, each marked against the base resume"),
 });
 
+// Experience the user confirmed is true but that isn't written in the base resume (e.g. "SOC 2 at Salesforce").
+export const FactSchema = z.object({ id: z.string(), keyword: z.string(), detail: z.string() });
+export type Fact = z.infer<typeof FactSchema>;
+
 export const EMPTY_RESUME: Resume = {
   name: "",
   headline: "",

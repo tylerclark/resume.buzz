@@ -1,5 +1,5 @@
 import { boolean, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { JobRequirement, Resume, StoredTailored } from "@/lib/types";
+import type { Fact, JobRequirement, Resume, StoredTailored } from "@/lib/types";
 
 // ---------- BetterAuth tables ----------
 
@@ -72,6 +72,7 @@ export const baseResume = pgTable("base_resume", {
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
   data: jsonb("data").$type<Resume>().notNull(),
+  facts: jsonb("facts").$type<Fact[]>().notNull().default([]),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

@@ -9,6 +9,7 @@ import {
   ResumeSchema,
   TailoredResumeSchema,
   finalResume,
+  type Fact,
   type Resume,
   type StoredTailored,
   type TailoredResume,
@@ -46,6 +47,13 @@ async function structured<T extends z.ZodType>(
 
 const resumeJson = (r: Resume) => JSON.stringify(r, null, 2);
 
+const factsBlock = (facts: Fact[]) =>
+  facts.length
+    ? `\n\n<confirmed_experience>\nThe candidate confirmed these are true even though the base resume doesn't mention them:\n${facts
+        .map((f) => `- ${f.keyword}: ${f.detail}`)
+        .join("\n")}\n</confirmed_experience>`
+    : "";
+
 export async function scrapePosting(url: string) {
   const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
   // Most ATS pages (Workday, iCIMS, etc.) render the posting client-side, so give JS time to run.
@@ -71,16 +79,21 @@ export function extractJob(url: string, markdown: string) {
   );
 }
 
-export function scoreJob(base: Resume, description: string) {
+export function scoreJob(base: Resume, description: string, facts: Fact[] = []) {
   return structured(
     JobScoreSchema,
     "You compare a candidate's resume to a job posting. Be honest and specific: 'hit' means clearly demonstrated in the resume, 'partial' means adjacent evidence, 'miss' means absent.",
-    `<resume>\n${resumeJson(base)}\n</resume>\n\n<posting>\n${description}\n</posting>`,
+    `<resume>\n${resumeJson(base)}\n</resume>${factsBlock(facts)}\n\n<posting>\n${description}\n</posting>`,
     "medium",
   );
 }
 
-export async function tailorResume(base: Resume, description: string, prompt: string): Promise<TailoredResume> {
+export async function tailorResume(
+  base: Resume,
+  description: string,
+  prompt: string,
+  facts: Fact[] = [],
+): Promise<TailoredResume> {
   const t = await structured(
     TailoredResumeSchema,
     `${prompt}
@@ -91,9 +104,10 @@ Output format rules:
 - If a line is unchanged, set text equal to original.
 - To drop a base bullet, keep it with text "". To add a line that has no base source, use original "" (only when it restates facts already in the resume).
 - Keep role, org and dates exactly as in the base resume.
+- Items in <confirmed_experience> are true. When relevant to the posting, work them into the entry they belong to (rewording a bullet or adding one with original "") or into Skills. Never attribute them to a different employer than stated.
 
 ${STYLE_RULES}`,
-    `<base_resume>\n${resumeJson(base)}\n</base_resume>\n\n<posting>\n${description}\n</posting>`,
+    `<base_resume>\n${resumeJson(base)}\n</base_resume>${factsBlock(facts)}\n\n<posting>\n${description}\n</posting>`,
     "high",
   );
   // Belt and braces: the rules above are a request; this makes them a guarantee.
@@ -135,7 +149,10 @@ export function parseResumeFile(file: { name: string; type: string; data: Buffer
           source: { type: "base64", media_type: "application/pdf", data: file.data.toString("base64") },
         },
       ];
-  content.push({ type: "text", text: "Convert this resume into the structured format. Copy text verbatim; don't rewrite." });
+  content.push({
+    type: "text",
+    text: "Convert this resume into the structured format. Copy text verbatim; don't rewrite.",
+  });
   return structured(
     ResumeSchema,
     "You convert resumes into structured data. Preserve the author's exact wording. Put skill lists as a single entry with empty role/org/dates whose bullets are the lines of the list.",
