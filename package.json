@@ -62,7 +62,7 @@
     "eslint-config-next": "16.3.6",
     "simple-git-hooks": "^2.14.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^6"
   },
   "packageManager": "pnpm@11.20.0"
 }
