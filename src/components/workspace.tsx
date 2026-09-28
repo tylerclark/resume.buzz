@@ -7,7 +7,7 @@ import type { TailorEvent } from "@/app/api/tailor/route";
 import type { Job } from "@/db/schema";
 import { authClient } from "@/lib/auth-client";
 import type { JobSummary } from "@/lib/data";
-import { DEFAULT_PROMPT, hasUserEdits, type Resume, type StoredTailored } from "@/lib/types";
+import { DEFAULT_PROMPT, hasUserEdits, resumeHash, type Resume, type StoredTailored } from "@/lib/types";
 import { BaseResumeDrawer } from "./base-resume-drawer";
 import { Logo } from "./logo";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
@@ -96,6 +96,11 @@ export function Workspace({
   }, [job, base]);
   const changes = job?.tailored && model ? countChanges(model) : { total: 0, user: 0 };
   const editing = !!draft;
+  // Tailored resumes are snapshots; flag when the base has changed since (null = tailored before we tracked it).
+  const stale = useMemo(
+    () => !!(job?.tailored && base && job.baseHash !== resumeHash(base)),
+    [job?.tailored, job?.baseHash, base],
+  );
 
   async function start(target: string) {
     setError(null);
@@ -541,6 +546,21 @@ export function Workspace({
                 <div className="w-full max-w-[720px] text-[12.5px] text-muted bg-white border border-line-2 rounded-[10px] px-3.5 py-2">
                   Click any line to edit it. Your changes are tracked separately from the AI&apos;s and shown in{" "}
                   <span className={`${DIFF_STYLES.u.swatch} rounded-[3px] px-1`}>purple</span>.
+                </div>
+              )}
+              {stale && !editing && (
+                <div className="w-full max-w-[720px] flex gap-3 items-center text-[12.5px] bg-warn-bg border border-[#f0d9a8] text-[#6b4a00] rounded-[10px] px-3.5 py-2.5">
+                  <span className="flex-1">
+                    <b>Your base resume changed</b> since this was tailored, so this version may be missing your latest
+                    edits or ordering.
+                    {job?.tailored &&
+                      hasUserEdits(job.tailored) &&
+                      " Re-tailoring replaces your manual edits on this job."}
+                  </span>
+                  {error && !promptOpen && <span className="text-bad">{error}</span>}
+                  <button onClick={regenerate} disabled={regen} className={`${btnPrimary} whitespace-nowrap`}>
+                    {regen ? "Re-tailoring…" : "Re-tailor"}
+                  </button>
                 </div>
               )}
               {showDiff && hasJob && !editing && (

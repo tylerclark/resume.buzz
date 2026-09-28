@@ -115,3 +115,23 @@ export const DEFAULT_PROMPT = `You are tailoring my resume for one specific job 
 - Reorder and reword bullets to mirror the posting's language and priorities.
 - Prefer the posting's exact keywords where they honestly apply.
 - Keep it to one page. Preserve my voice; no buzzwords.`;
+
+// Stable fingerprint of a base resume (runs on server and client). FNV-1a over the JSON.
+export function resumeHash(r: Resume): string {
+  // Sorted keys: Postgres jsonb doesn't preserve key order.
+  const str = JSON.stringify(r, (_k, v) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.keys(v)
+            .sort()
+            .map((k) => [k, v[k]]),
+        )
+      : v,
+  );
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}

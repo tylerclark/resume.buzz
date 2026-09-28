@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { job } from "@/db/schema";
 import { tailorResume } from "@/lib/ai";
 import { getBaseResume, getJob, userFromRequest } from "@/lib/data";
-import { DEFAULT_PROMPT } from "@/lib/types";
+import { DEFAULT_PROMPT, resumeHash } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -26,6 +26,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]/t
       .set({
         prompt: tailorPrompt,
         tailored,
+        baseHash: resumeHash(base),
         keywordsHit: tailored.keywordsHit,
         keywordsMissing: tailored.keywordsMissing,
         updatedAt: new Date(),

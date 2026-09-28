@@ -97,6 +97,8 @@ export const job = pgTable(
     raw: text("raw").notNull(),
     prompt: text("prompt").notNull(),
     tailored: jsonb("tailored").$type<StoredTailored>(),
+    // Hash of the base resume this was tailored from; differs from the current base when it's stale.
+    baseHash: text("base_hash"),
     coverPrompt: text("cover_prompt").notNull().default(""),
     coverLetter: jsonb("cover_letter").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

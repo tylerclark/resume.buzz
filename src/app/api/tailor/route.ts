@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { job } from "@/db/schema";
 import { extractJob, scoreJob, scrapePosting, tailorResume } from "@/lib/ai";
 import { getBaseResume, userFromRequest } from "@/lib/data";
-import { DEFAULT_PROMPT } from "@/lib/types";
+import { DEFAULT_PROMPT, resumeHash } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
           raw: details.description,
           prompt: tailorPrompt,
           tailored,
+          baseHash: resumeHash(base),
         });
         send({ step: 4 });
         send({ done: id });
