@@ -1,14 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Logo } from "@/components/logo";
 import type { Entry, Resume } from "@/lib/types";
 
 const card = "bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5";
 const field =
-  "w-full box-border border border-line rounded-[10px] px-3.5 py-3 text-[13.5px] leading-[1.6] resize-y text-ink bg-field";
-const small = "border border-line rounded-lg px-2.5 py-1.5 text-[12.5px] text-ink bg-field min-w-0";
+  "w-full box-border border border-line rounded-[10px] px-3.5 py-3 text-[13.5px] leading-[1.6] resize-none overflow-hidden text-ink bg-field";
+const small = "w-full box-border border border-line rounded-lg px-2.5 py-1.5 text-[12.5px] text-ink bg-field min-w-0";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1 min-w-0">
+      <span className="text-[10.5px] font-bold tracking-[.06em] uppercase text-faint">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+// Grows to fit its content so long entries never need an inner scrollbar.
+function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight + 2}px`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [props.value]);
+  return <textarea ref={ref} rows={2} {...props} />;
+}
 const ghost =
   "bg-white border border-line-2 text-ink px-3.5 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer hover:bg-canvas disabled:opacity-60";
 
@@ -106,24 +133,30 @@ export function BaseEditor({ initial, isNew }: { initial: Resume; isNew: boolean
 
         <section className={card}>
           <div className="eyebrow text-ink">Header</div>
-          <input
-            value={r.name}
-            onChange={(e) => update((d) => void (d.name = e.target.value))}
-            placeholder="Full name"
-            className={`${small} text-[15px] font-bold`}
-          />
-          <input
-            value={r.headline}
-            onChange={(e) => update((d) => void (d.headline = e.target.value))}
-            placeholder="Headline — e.g. Product designer · 8 years building software people rely on"
-            className={small}
-          />
-          <input
-            value={r.contact}
-            onChange={(e) => update((d) => void (d.contact = e.target.value))}
-            placeholder="City · email · website"
-            className={small}
-          />
+          <Field label="Name">
+            <input
+              value={r.name}
+              onChange={(e) => update((d) => void (d.name = e.target.value))}
+              placeholder="Full name"
+              className={`${small} text-[15px] font-bold`}
+            />
+          </Field>
+          <Field label="Headline">
+            <input
+              value={r.headline}
+              onChange={(e) => update((d) => void (d.headline = e.target.value))}
+              placeholder="e.g. Product designer · 8 years building software people rely on"
+              className={small}
+            />
+          </Field>
+          <Field label="Contact line">
+            <input
+              value={r.contact}
+              onChange={(e) => update((d) => void (d.contact = e.target.value))}
+              placeholder="City · email · website"
+              className={small}
+            />
+          </Field>
         </section>
 
         {r.sections.map((s, si) => (
@@ -142,51 +175,61 @@ export function BaseEditor({ initial, isNew }: { initial: Resume; isNew: boolean
               </button>
             </div>
             {s.entries.map((e, ei) => (
-              <div key={ei} className="flex flex-col gap-2 border-t border-line pt-3 first-of-type:border-0 first-of-type:pt-0">
-                <div className="grid grid-cols-[1fr_1fr_160px_auto] gap-2 items-center">
-                  <input
-                    value={e.role}
-                    onChange={(ev) => update((d) => void (d.sections[si].entries[ei].role = ev.target.value))}
-                    placeholder="Role / degree (optional)"
-                    className={small}
-                  />
-                  <input
-                    value={e.org}
-                    onChange={(ev) => update((d) => void (d.sections[si].entries[ei].org = ev.target.value))}
-                    placeholder="Company / school"
-                    className={small}
-                  />
-                  <input
-                    value={e.dates}
-                    onChange={(ev) => update((d) => void (d.sections[si].entries[ei].dates = ev.target.value))}
-                    placeholder="2021 – present"
-                    className={small}
-                  />
+              <div
+                key={ei}
+                className="flex flex-col gap-2 border-t border-line pt-3 first-of-type:border-0 first-of-type:pt-0"
+              >
+                <div className="grid grid-cols-[1fr_1fr_220px_auto] gap-2 items-end">
+                  <Field label="Role / degree">
+                    <input
+                      value={e.role}
+                      onChange={(ev) => update((d) => void (d.sections[si].entries[ei].role = ev.target.value))}
+                      placeholder="Optional"
+                      className={small}
+                    />
+                  </Field>
+                  <Field label="Company / school">
+                    <input
+                      value={e.org}
+                      onChange={(ev) => update((d) => void (d.sections[si].entries[ei].org = ev.target.value))}
+                      placeholder="Optional"
+                      className={small}
+                    />
+                  </Field>
+                  <Field label="Dates">
+                    <input
+                      value={e.dates}
+                      onChange={(ev) => update((d) => void (d.sections[si].entries[ei].dates = ev.target.value))}
+                      placeholder="2021 – present"
+                      className={small}
+                    />
+                  </Field>
                   <button
                     onClick={() => update((d) => void d.sections[si].entries.splice(ei, 1))}
-                    className="bg-transparent border-0 text-faint text-[16px] cursor-pointer hover:text-bad"
+                    className="bg-transparent border-0 text-faint text-[16px] cursor-pointer hover:text-bad pb-1.5"
                     title="Remove entry"
                   >
                     ×
                   </button>
                 </div>
-                <textarea
-                  value={e.bullets.join("\n")}
-                  onChange={(ev) =>
-                    update((d) => void (d.sections[si].entries[ei].bullets = ev.target.value.split("\n")))
-                  }
-                  onBlur={() =>
-                    update(
-                      (d) =>
-                        void (d.sections[si].entries[ei].bullets = d.sections[si].entries[ei].bullets
-                          .map((b) => b.replace(/^\s*[•\-*]\s*/, "").trimEnd())
-                          .filter(Boolean)),
-                    )
-                  }
-                  rows={Math.max(2, e.bullets.length + 1)}
-                  placeholder="One bullet per line"
-                  className={field}
-                />
+                <Field label={e.role || e.org ? "Bullets — one per line" : "Lines — one per line"}>
+                  <AutoTextarea
+                    value={e.bullets.join("\n")}
+                    onChange={(ev) =>
+                      update((d) => void (d.sections[si].entries[ei].bullets = ev.target.value.split("\n")))
+                    }
+                    onBlur={() =>
+                      update(
+                        (d) =>
+                          void (d.sections[si].entries[ei].bullets = d.sections[si].entries[ei].bullets
+                            .map((b) => b.replace(/^\s*[•\-*]\s*/, "").trimEnd())
+                            .filter(Boolean)),
+                      )
+                    }
+                    placeholder="One bullet per line"
+                    className={field}
+                  />
+                </Field>
               </div>
             ))}
             <button
@@ -199,7 +242,15 @@ export function BaseEditor({ initial, isNew }: { initial: Resume; isNew: boolean
         ))}
 
         <button
-          onClick={() => update((d) => void d.sections.push({ title: "New section", entries: [newEntry()] }))}
+          onClick={() =>
+            update(
+              (d) =>
+                void d.sections.push({
+                  title: "New section",
+                  entries: [newEntry()],
+                }),
+            )
+          }
           className={`${ghost} self-start`}
         >
           + Add section
