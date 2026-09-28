@@ -99,7 +99,7 @@ export function Workspace({
   const [coverPrompt, setCoverPrompt] = useState(initialJob?.coverPrompt ?? "");
   const [cover, setCover] = useState<string[] | null>(initialJob?.coverLetter ?? null);
   const [coverBusy, setCoverBusy] = useState(false);
-  const [coverDraft, setCoverDraft] = useState<string[] | null>(null); // non-null = editing the letter
+  const [coverDraft, setCoverDraft] = useState<string | null>(null); // non-null = editing the letter (blank line = new paragraph)
 
   const hasJob = !!job;
   const isLoading = phase === "loading";
@@ -111,7 +111,7 @@ export function Workspace({
   }, [job, base]);
   const changes = job?.tailored && model ? countChanges(model) : { total: 0, user: 0 };
   const editing = !!draft;
-  const editingHere = tab === "cover" ? !!coverDraft : editing;
+  const editingHere = tab === "cover" ? coverDraft !== null : editing;
   // Tailored resumes are snapshots; flag when the base has changed since (null = tailored before we tracked it).
   const stale = useMemo(
     () => !!(job?.tailored && base && job.baseHash !== resumeHash(base)),
@@ -238,13 +238,13 @@ export function Workspace({
   }
 
   async function saveCoverDraft() {
-    if (!job || !coverDraft) return;
+    if (!job || coverDraft === null) return;
     setSavingDraft(true);
     setError(null);
     const res = await fetch(`/api/jobs/${job.id}/cover`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ coverLetter: coverDraft }),
+      body: JSON.stringify({ coverLetter: coverDraft.split(/\n\s*\n/) }),
     });
     const body = await res.json();
     setSavingDraft(false);
@@ -460,7 +460,11 @@ export function Workspace({
             {(tab === "resume" || (cover && !coverBusy)) && (
               <button
                 onClick={
-                  editingHere ? undefined : tab === "cover" ? () => cover && setCoverDraft([...cover]) : startEditing
+                  editingHere
+                    ? undefined
+                    : tab === "cover"
+                      ? () => cover && setCoverDraft(cover.join("\n\n"))
+                      : startEditing
                 }
                 title={tab === "cover" ? "Edit cover letter" : hasJob ? "Edit this resume" : "Edit base resume"}
                 aria-label={tab === "cover" ? "Edit cover letter" : hasJob ? "Edit this resume" : "Edit base resume"}
@@ -649,7 +653,7 @@ export function Workspace({
 
           {tab === "cover" && job && (
             <div className="flex-1 min-h-0 overflow-y-auto px-8 pt-7 pb-20 flex flex-col items-center gap-4">
-              {!coverDraft && (
+              {coverDraft === null && (
                 <div className="w-full max-w-[720px] bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5">
                   <div className="flex justify-between items-baseline">
                     <div className="font-bold text-[14px]">Cover letter prompt</div>
@@ -684,39 +688,18 @@ export function Workspace({
                 </div>
               )}
 
-              {coverDraft ? (
+              {coverDraft !== null ? (
                 <article className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 text-[14.5px] leading-[1.7] shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)] outline-2 outline-dashed outline-user-mark outline-offset-4">
-                  <div className="font-sans text-[12.5px] text-muted mb-6">
-                    {[base?.name, base?.contact].filter(Boolean).join(" · ")}
+                  <div className="mb-6">
+                    {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                   </div>
-                  <div className="flex flex-col gap-2">
-                    {coverDraft.map((p, i) => (
-                      <div key={i} className="flex gap-2 items-start">
-                        <AutoTextarea
-                          value={p}
-                          onChange={(e) =>
-                            setCoverDraft(
-                              (d) => d && d.map((x, j) => (j === i ? e.target.value.replace(/\n+/g, " ") : x)),
-                            )
-                          }
-                          className="flex-1 box-border border border-transparent hover:border-line focus:border-line rounded-md px-2 py-1 -mx-2 text-[14.5px] leading-[1.7] resize-none overflow-hidden bg-transparent focus:bg-field font-serif text-ink-2"
-                        />
-                        <button
-                          onClick={() => setCoverDraft((d) => d && d.filter((_, j) => j !== i))}
-                          title="Remove paragraph"
-                          className="bg-transparent border-0 p-0 pt-2 text-faint text-[16px] cursor-pointer hover:text-bad"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => setCoverDraft((d) => d && [...d, ""])}
-                    className="bg-transparent border-0 p-0 mt-2 text-brand text-[12.5px] font-semibold font-sans cursor-pointer"
-                  >
-                    + Add paragraph
-                  </button>
+                  <AutoTextarea
+                    autoFocus
+                    value={coverDraft}
+                    onChange={(e) => setCoverDraft(e.target.value)}
+                    className="w-full box-border border border-line rounded-md px-3 py-2 -mx-3 text-[14.5px] leading-[1.7] resize-none overflow-hidden bg-field font-serif text-ink-2"
+                  />
+                  <div className="font-sans text-[11.5px] text-faint mt-1">Leave a blank line between paragraphs.</div>
                   <p className="mt-5 mb-0">
                     Warmly,
                     <br />
@@ -735,13 +718,11 @@ export function Workspace({
                 </div>
               ) : cover ? (
                 <article className="print-doc w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 text-[14.5px] leading-[1.7] shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)]">
-                  <div className="font-sans text-[12.5px] text-muted mb-6">
-                    {[base?.name, base?.contact].filter(Boolean).join(" · ")}
-                    <br />
+                  <div className="mb-6">
                     {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                   </div>
                   {cover.map((p, i) => (
-                    <p key={i} className="m-0 mb-3.5">
+                    <p key={i} className="m-0 mb-3.5 whitespace-pre-wrap">
                       {p}
                     </p>
                   ))}
