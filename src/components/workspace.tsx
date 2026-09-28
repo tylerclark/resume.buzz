@@ -8,8 +8,17 @@ import type { Job } from "@/db/schema";
 import { alignToBase } from "@/lib/align";
 import { authClient } from "@/lib/auth-client";
 import type { JobSummary } from "@/lib/data";
-import { DEFAULT_PROMPT, hasUserEdits, resumeHash, type Fact, type Resume, type StoredTailored } from "@/lib/types";
+import {
+  DEFAULT_PROMPT,
+  hasUserEdits,
+  JOB_STATUSES,
+  resumeHash,
+  type Fact,
+  type Resume,
+  type StoredTailored,
+} from "@/lib/types";
 import { BaseResumeDrawer } from "./base-resume-drawer";
+import { StatusPicker, StatusPill } from "./status-picker";
 import { Logo } from "./logo";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
 import { TailoredEditor } from "./tailored-editor";
@@ -278,6 +287,7 @@ export function Workspace({
                   {[job.company, job.location].filter(Boolean).join(" · ")}
                 </div>
               </div>
+              <StatusPicker key={job.status} jobId={job.id} status={job.status} />
               <HistoryMenu history={history} currentId={job.id} />
               <Link href="/" className={`${btnGhost} hover:no-underline`}>
                 New job
@@ -393,27 +403,7 @@ export function Workspace({
                     <h3 className="m-0 eyebrow">Recent</h3>
                     <div className="bg-white border border-line-2 rounded-[14px] p-1.5 flex flex-col">
                       {history.map((h, i) => (
-                        <Link
-                          key={h.id}
-                          href={`/j/${h.id}`}
-                          className="grid grid-cols-[34px_1fr_auto] gap-2.5 items-center text-left p-2 rounded-[10px] text-inherit hover:bg-canvas hover:no-underline hover:text-inherit"
-                        >
-                          <div
-                            className="w-[34px] h-[34px] rounded-[9px] text-white grid place-items-center font-extrabold text-[13px]"
-                            style={{ background: TINTS[i % TINTS.length] }}
-                          >
-                            {h.company[0]?.toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-semibold text-[13px] truncate text-ink">{h.title}</div>
-                            <div className="text-[11.5px] text-subtle">
-                              {h.company} · {when(h.createdAt)}
-                            </div>
-                          </div>
-                          <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
-                            {h.score}%
-                          </div>
-                        </Link>
+                        <JobRow key={h.id} h={h} i={i} />
                       ))}
                     </div>
                   </section>
@@ -705,6 +695,54 @@ export function Workspace({
   );
 }
 
+function JobRow({
+  h,
+  i,
+  current,
+  onNavigate,
+  readOnly,
+}: {
+  h: JobSummary;
+  i: number;
+  current?: boolean;
+  onNavigate?: () => void;
+  readOnly?: boolean;
+}) {
+  const applied = h.appliedAt
+    ? ` · Applied ${new Date(h.appliedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+    : "";
+  return (
+    <div
+      className={`flex items-center gap-2.5 p-2 rounded-[10px] ${current ? "bg-brand-tint" : "hover:bg-canvas"} ${
+        JOB_STATUSES[h.status].closed ? "opacity-60 hover:opacity-100" : ""
+      }`}
+    >
+      <Link
+        href={`/j/${h.id}`}
+        onClick={onNavigate}
+        aria-current={current ? "page" : undefined}
+        className="flex-1 min-w-0 flex items-center gap-2.5 text-inherit hover:no-underline hover:text-inherit"
+      >
+        <div
+          className="w-[32px] h-[32px] flex-none rounded-[9px] text-white grid place-items-center font-extrabold text-[12.5px]"
+          style={{ background: TINTS[i % TINTS.length] }}
+        >
+          {h.company[0]?.toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-[13px] truncate text-ink">{h.title}</div>
+          <div className="text-[11.5px] text-subtle truncate">
+            {h.company} · {when(h.createdAt)}
+            {applied}
+          </div>
+        </div>
+      </Link>
+      {readOnly ? <StatusPill status={h.status} /> : <StatusPicker key={h.status} jobId={h.id} status={h.status} />}
+      <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">{h.score}%</div>
+    </div>
+  );
+}
+
 function HistoryMenu({ history, currentId }: { history: JobSummary[]; currentId: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -743,33 +781,15 @@ function HistoryMenu({ history, currentId }: { history: JobSummary[]; currentId:
             <div className="eyebrow px-2 pt-1.5 pb-2">History</div>
             {history.length === 0 && <div className="px-2 pb-2 text-[13px] text-subtle">No previous jobs yet.</div>}
             {history.map((h, i) => {
-              const current = h.id === currentId;
               return (
-                <Link
+                <JobRow
                   key={h.id}
-                  href={`/j/${h.id}`}
-                  onClick={() => setOpen(false)}
-                  aria-current={current ? "page" : undefined}
-                  className={`grid grid-cols-[30px_1fr_auto] gap-2.5 items-center p-2 rounded-[9px] text-inherit hover:no-underline hover:text-inherit ${
-                    current ? "bg-brand-tint" : "hover:bg-canvas"
-                  }`}
-                >
-                  <div
-                    className="w-[30px] h-[30px] rounded-lg text-white grid place-items-center font-extrabold text-[12px]"
-                    style={{ background: TINTS[i % TINTS.length] }}
-                  >
-                    {h.company[0]?.toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-[13px] truncate text-ink">{h.title}</div>
-                    <div className="text-[11.5px] text-subtle truncate">
-                      {h.company} · {when(h.createdAt)}
-                    </div>
-                  </div>
-                  <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
-                    {h.score}%
-                  </div>
-                </Link>
+                  h={h}
+                  i={i}
+                  current={h.id === currentId}
+                  onNavigate={() => setOpen(false)}
+                  readOnly
+                />
               );
             })}
           </div>

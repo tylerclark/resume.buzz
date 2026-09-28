@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { baseResume, job, type Job } from "@/db/schema";
 import { auth } from "./auth";
@@ -45,12 +45,24 @@ export async function getJob(userId: string, id: string): Promise<Job | null> {
 }
 
 export async function listJobs(userId: string, limit = 12) {
-  return db
-    .select({ id: job.id, title: job.title, company: job.company, score: job.score, createdAt: job.createdAt })
-    .from(job)
-    .where(eq(job.userId, userId))
-    .orderBy(desc(job.createdAt))
-    .limit(limit);
+  return (
+    db
+      .select({
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        score: job.score,
+        status: job.status,
+        statusAt: job.statusAt,
+        appliedAt: job.appliedAt,
+        createdAt: job.createdAt,
+      })
+      .from(job)
+      .where(eq(job.userId, userId))
+      // Closed jobs (rejected / no longer interested) sink to the bottom.
+      .orderBy(sql`${job.status} in ('rejected', 'withdrawn')`, desc(job.createdAt))
+      .limit(limit)
+  );
 }
 
 export type JobSummary = Awaited<ReturnType<typeof listJobs>>[number];

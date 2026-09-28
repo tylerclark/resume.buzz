@@ -1,5 +1,5 @@
 import { boolean, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import type { Fact, JobRequirement, Resume, StoredTailored } from "@/lib/types";
+import type { Fact, JobRequirement, JobStatus, Resume, StoredTailored } from "@/lib/types";
 
 // ---------- BetterAuth tables ----------
 
@@ -100,6 +100,9 @@ export const job = pgTable(
     tailored: jsonb("tailored").$type<StoredTailored>(),
     // Hash of the base resume this was tailored from; differs from the current base when it's stale.
     baseHash: text("base_hash"),
+    status: text("status").$type<JobStatus>().notNull().default("not_applied"),
+    statusAt: timestamp("status_at"),
+    appliedAt: timestamp("applied_at"),
     coverPrompt: text("cover_prompt").notNull().default(""),
     coverLetter: jsonb("cover_letter").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
