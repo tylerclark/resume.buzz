@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { ApiTokensDialog } from "./api-tokens-dialog";
 import { THEMES, useTheme, type Theme } from "./theme";
 import { JOB_STAGES, stageInFlight } from "@/lib/types";
 import { isBusy, shownScore, useJobStatuses, type JobStatus } from "./job-status";
@@ -270,6 +271,7 @@ export function Spinner({ className = "" }: { className?: string }) {
 function UserMenu({ user }: { user: { name: string; email: string } }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [tokensOpen, setTokensOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -304,6 +306,16 @@ function UserMenu({ user }: { user: { name: string; email: string } }) {
             <div className="my-1 border-t border-line" />
             <button
               role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setTokensOpen(true);
+              }}
+              className="w-full text-left bg-transparent hover:bg-canvas border-0 rounded-md px-2.5 py-2 text-[13px] font-semibold text-ink cursor-pointer"
+            >
+              API tokens
+            </button>
+            <button
+              role="menuitem"
               onClick={async () => {
                 await authClient.signOut();
                 router.replace("/login");
@@ -316,6 +328,7 @@ function UserMenu({ user }: { user: { name: string; email: string } }) {
           </div>
         </>
       )}
+      {tokensOpen && <ApiTokensDialog onClose={() => setTokensOpen(false)} />}
     </div>
   );
 }

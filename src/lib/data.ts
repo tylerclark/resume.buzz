@@ -1,9 +1,9 @@
 import "server-only";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { baseResume, job, type Job } from "@/db/schema";
 import { auth } from "./auth";
-import { STAGE_TIMEOUT_MESSAGE, STAGE_TIMEOUT_MS, stageInFlight, type Fact, type Resume } from "./types";
+import { canonicalJobUrl, STAGE_TIMEOUT_MESSAGE, STAGE_TIMEOUT_MS, stageInFlight, type Fact, type Resume } from "./types";
 
 export async function userFromRequest(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -85,6 +85,8 @@ const summaryColumns = {
   coverStage: job.coverStage,
   coverError: job.coverError,
   hasCover: sql<boolean>`${job.coverLetter} is not null`,
+  source: job.source,
+  seenAt: job.seenAt,
   statusAt: job.statusAt,
   appliedAt: job.appliedAt,
   createdAt: job.createdAt,
@@ -96,8 +98,13 @@ export async function listJobs(userId: string, limit = 12) {
     .select(summaryColumns)
     .from(job)
     .where(eq(job.userId, userId))
-    // Closed jobs (rejected / no longer interested) sink to the bottom.
-    .orderBy(sql`${job.status} in ('rejected', 'withdrawn')`, desc(job.createdAt))
+    // Jobs prepared in the background that haven't been looked at yet come first; closed jobs (rejected /
+    // no longer interested) sink to the bottom.
+    .orderBy(
+      sql`(${job.source} <> 'app' and ${job.seenAt} is null) desc`,
+      sql`${job.status} in ('rejected', 'withdrawn')`,
+      desc(job.createdAt),
+    )
     .limit(limit);
   return rows.map(settleStale);
 }
@@ -112,3 +119,23 @@ export async function listJobsByIds(userId: string, ids: string[]) {
 }
 
 export type JobSummary = Awaited<ReturnType<typeof listJobs>>[number];
+
+// For de-duplicating API submissions: the id of the user's newest job for the same posting, comparing
+// canonical URLs so tracking params on either side don't matter. One user's job list is small.
+export async function findJobIdByUrl(userId: string, canonical: string) {
+  const rows = await db
+    .select({ id: job.id, url: job.url })
+    .from(job)
+    .where(and(eq(job.userId, userId), ne(job.url, "")))
+    .orderBy(desc(job.createdAt));
+  return rows.find((r) => canonicalJobUrl(r.url) === canonical)?.id ?? null;
+}
+
+// API submissions in the last 24h, for the daily cap.
+export async function countRecentApiJobs(userId: string) {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(job)
+    .where(and(eq(job.userId, userId), ne(job.source, "app"), gt(job.createdAt, new Date(Date.now() - 86_400_000))));
+  return row?.n ?? 0;
+}

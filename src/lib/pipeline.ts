@@ -121,12 +121,28 @@ async function run(id: string, userId: string, from: JobStage) {
 
 // Create the row and schedule the full pipeline. Returns immediately with the new id. Either a URL to
 // scrape or a pasted description (with an optional URL kept only as the link back to the posting).
-export async function startJob(userId: string, source: { url: string; description?: string }, prompt: string) {
+// API submissions pass `meta`: where it came from, notes, and title/company to show until extraction.
+export async function startJob(
+  userId: string,
+  source: { url: string; description?: string },
+  prompt: string,
+  meta: { source?: string; notes?: string; title?: string; company?: string } = {},
+) {
   const id = crypto.randomUUID();
   const raw = source.description?.trim() ?? "";
-  await db
-    .insert(job)
-    .values({ id, userId, url: source.url, pasted: !!raw, title: "", company: "", raw, prompt, stage: "queued" });
+  await db.insert(job).values({
+    id,
+    userId,
+    url: source.url,
+    pasted: !!raw,
+    title: meta.title ?? "",
+    company: meta.company ?? "",
+    raw,
+    prompt,
+    stage: "queued",
+    source: meta.source ?? "app",
+    notes: meta.notes ?? "",
+  });
   after(() => run(id, userId, raw ? "extracting" : "scraping"));
   return id;
 }

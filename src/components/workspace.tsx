@@ -9,6 +9,7 @@ import type { JobSummary } from "@/lib/data";
 import {
   DEFAULT_PROMPT,
   hasUserEdits,
+  isBackground,
   JOB_STAGES,
   JOB_STATUSES,
   PIPELINE_STEPS,
@@ -16,6 +17,7 @@ import {
   stageInFlight,
   type Fact,
   type JobStage,
+  type JobStatus,
   type Resume,
   type StoredTailored,
 } from "@/lib/types";
@@ -84,7 +86,7 @@ export function Workspace({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [draft, setDraft] = useState<StoredTailored | null>(null); // non-null = editing the tailored resume
   const [savingDraft, setSavingDraft] = useState(false);
-  const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "delete" | null>(null);
+  const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "delete" | "status" | null>(null);
   // True from the moment a re-tailor is requested until the server confirms it's queued, so the resume
   // pane reacts on click instead of waiting a round-trip (or two, when facts are saved first).
   const [retailorPending, setRetailorPending] = useState(false);
@@ -147,6 +149,19 @@ export function Workspace({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.missing]);
+
+  // Opening a job that arrived through the API is what clears its "Background" badge.
+  useEffect(() => {
+    if (!job || !isBackground(job)) return;
+    fetch(`/api/jobs/${job.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seen: true }),
+    })
+      .then((r) => r.ok && router.refresh())
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id]);
 
   useLeaveGuard(draft !== null || coverDraft !== null);
 
@@ -279,6 +294,23 @@ export function Workspace({
     if (!res.ok && res.status !== 404) return setError("Couldn't remove it. Try again.");
     tabs.close(job.id);
     router.replace("/");
+    router.refresh();
+  }
+
+  // One-click triage from the background banner.
+  async function setStatus(status: JobStatus) {
+    if (!job || busyAction) return;
+    setBusyAction("status");
+    setError(null);
+    const res = await fetch(`/api/jobs/${job.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusyAction(null);
+    if (!res.ok) return setError(body.error ?? "That didn't work.");
+    setJob({ ...job, ...body });
     router.refresh();
   }
 
@@ -480,6 +512,15 @@ export function Workspace({
                 </section>
               )}
             </>
+          )}
+
+          {job && job.source !== "app" && job.status === "not_applied" && (
+            <BackgroundCard
+              job={job}
+              ready={!inFlight && hasResume}
+              busy={busyAction === "status"}
+              onStatus={setStatus}
+            />
           )}
 
           {job && building && (
@@ -985,6 +1026,58 @@ function ProgressCard({
   );
 }
 
+function BackgroundBadge() {
+  return (
+    <span
+      title="Submitted through the API and prepared in the background. Open it to review."
+      className="flex-none text-[10.5px] font-bold uppercase tracking-[.04em] text-brand bg-brand-tint border border-brand-line px-1.5 py-px rounded-full leading-4"
+    >
+      Background
+    </span>
+  );
+}
+
+// Shown on a job that came in through the API until it's triaged: where it came from, the client's
+// notes, and the two usual outcomes.
+function BackgroundCard({
+  job,
+  ready,
+  busy,
+  onStatus,
+}: {
+  job: Job;
+  ready: boolean;
+  busy: boolean;
+  onStatus: (s: JobStatus) => void;
+}) {
+  return (
+    <div className="bg-surface border border-brand-line rounded-[14px] px-[18px] py-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <BackgroundBadge />
+        <span className="text-[12.5px] text-subtle truncate">
+          Sent by <span className="font-semibold text-ink">{job.source}</span> · {when(job.createdAt)}
+        </span>
+      </div>
+      {job.notes && (
+        <p className="m-0 text-[13px] text-muted leading-[1.55] whitespace-pre-wrap break-words">{job.notes}</p>
+      )}
+      <div className="flex gap-2 justify-end">
+        <button onClick={() => onStatus("withdrawn")} disabled={busy} className={btnGhost}>
+          No longer interested
+        </button>
+        <button
+          onClick={() => onStatus("applied")}
+          disabled={busy || !ready}
+          title={ready ? undefined : "Available once the resume is tailored"}
+          className={btnPrimary}
+        >
+          Mark applied
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function JobRow({
   h,
   i,
@@ -1034,7 +1127,10 @@ function JobRow({
           </div>
         )}
         <div className="min-w-0">
-          <div className="font-semibold text-[13px] truncate text-ink">{title}</div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="font-semibold text-[13px] truncate text-ink">{title}</div>
+            {isBackground(h) && <BackgroundBadge />}
+          </div>
           <div className={`text-[11.5px] truncate ${working ? "text-brand" : failed ? "text-bad" : "text-subtle"}`}>
             {working
               ? `${JOB_STAGES[live.stage].label}…`

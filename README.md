@@ -80,6 +80,25 @@ flowchart LR
 - **Auth** (`src/lib/auth.ts`). BetterAuth email one-time codes through Resend. OTPs are stored hashed. A fail-closed allowlist (`ALLOWED_EMAILS`) gates sign-in at the auth hook, not just in the email sender, because BetterAuth swallows errors thrown from the sender.
 - **Tabs** (`src/components/tabs-store.tsx`). Open tabs live in localStorage per browser; the URL says which one is active, so plain links, bookmarks and the back button all work.
 
+## API
+
+Scripts and agents can submit jobs to be tailored in the background. Create a token under **account menu → API tokens** (shown once; only its SHA-256 is stored), then:
+
+```sh
+curl -X POST https://resume.buzz/api/jobs \
+  -H "Authorization: Bearer rb_…" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://jobs.example.com/123", "source": "my-agent", "notes": "Strong fit"}'
+# → 202 {"id": "…", "stage": "queued", "link": "https://resume.buzz/j/…", "duplicate": false}
+```
+
+- **Body**: `url` and/or `description` (pasted posting text, 200+ chars), plus optional `title`, `company`, `notes`, `comp`, `priority`, `source` (a label shown in the app), `prompt`. Unknown fields are ignored. Send an array (or `{"jobs": […]}`) for up to 10 at once.
+- **Dedupe**: a URL you already have (ignoring `utm_*` and similar tracking params) returns the existing job with `"duplicate": true`.
+- **Status**: `GET /api/jobs?ids=a,b` with the same token. `stage` goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
+- **Limits**: 50 API jobs per rolling 24 hours per user. Tokens only work on `/api/jobs`.
+
+In the app, submitted jobs sort to the top of Recent with a **Background** badge until opened, and the job view has one-click **No longer interested** / **Mark applied**.
+
 ## Stack
 
 | Layer | Choice |

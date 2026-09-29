@@ -50,6 +50,13 @@
       "when": 1790624779669,
       "tag": "0006_flaky_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790654318483,
+      "tag": "0007_furry_paladin",
+      "breakpoints": true
     }
   ]
 }

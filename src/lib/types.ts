@@ -138,6 +138,38 @@ export const PIPELINE_STEPS = [
 export const isJobStage = (s: unknown): s is JobStage => typeof s === "string" && s in JOB_STAGES;
 export const stageInFlight = (s: JobStage) => s !== "done" && s !== "failed";
 
+// A job an API client submitted that the user hasn't opened yet: shows the "Background" badge.
+export const isBackground = (j: { source: string; seenAt: Date | string | null }) => j.source !== "app" && !j.seenAt;
+
+// Validates a job posting URL (http(s), real hostname). Returns the normalized URL or null.
+export function parseJobUrl(raw: unknown): string | null {
+  try {
+    const u = new URL(String(raw ?? "").trim());
+    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes(".")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+// The same posting shared twice usually differs only by tracking params or a fragment.
+export function canonicalJobUrl(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  u.hash = "";
+  for (const k of [...u.searchParams.keys()]) {
+    if (/^(utm_|gh_src$|ref$|source$|src$|trk)/i.test(k)) u.searchParams.delete(k);
+  }
+  return u.toString();
+}
+
+export const MIN_DESCRIPTION = 200;
+export const MAX_DESCRIPTION = 60_000;
+
 export type CoverStage = "idle" | "writing" | "failed";
 
 // A pipeline that hasn't advanced in this long is considered dead (the function was killed or crashed

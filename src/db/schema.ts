@@ -119,6 +119,12 @@ export const job = pgTable(
     coverLetter: jsonb("cover_letter").$type<string[]>(),
     coverStage: text("cover_stage").$type<CoverStage>().notNull().default("idle"),
     coverError: text("cover_error"),
+    // Where the job came from: "app" for the UI, otherwise the label an API client sent (e.g. "jobby").
+    source: text("source").notNull().default("app"),
+    // Free-form context an API client attached (why it's a fit, comp, priority…). Shown on the job.
+    notes: text("notes").notNull().default(""),
+    // When the user first opened (or triaged) a job that arrived through the API. Null = still "Background".
+    seenAt: timestamp("seen_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -126,3 +132,24 @@ export const job = pgTable(
 );
 
 export type Job = typeof job.$inferSelect;
+
+// Personal API tokens for submitting jobs from scripts and agents. Only the SHA-256 of the token is
+// stored; the token itself is shown once, at creation.
+export const apiToken = pgTable(
+  "api_token",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    // Last few characters, so the user can tell tokens apart.
+    hint: text("hint").notNull(),
+    lastUsedAt: timestamp("last_used_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("api_token_user_id_idx").on(t.userId)],
+);
+
+export type ApiToken = typeof apiToken.$inferSelect;
