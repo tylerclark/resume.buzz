@@ -35,16 +35,16 @@ const COVER_CHIPS = [
   "Mention I'm open to relocating",
 ];
 
-const TINTS = ["#0f1b3d", "#1a6fe8", "#22b55e"];
+const TINTS = ["var(--color-avatar)", "var(--color-brand)", "var(--color-ok)"];
 
 // Shared by the left (job) and right (resume) toolbars so they line up.
-const toolbar = "flex items-center min-h-[61px] box-border px-5 py-2.5 bg-white border-b border-line flex-none";
+const toolbar = "flex items-center min-h-[61px] box-border px-5 py-2.5 bg-surface border-b border-line flex-none";
 const btnGhost =
-  "bg-white hover:bg-canvas border border-line-2 text-ink px-3 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer whitespace-nowrap";
+  "bg-surface hover:bg-canvas border border-line-2 text-ink px-3 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer whitespace-nowrap";
 const btnPrimary =
   "bg-brand hover:bg-brand-hover text-white border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer disabled:opacity-60";
 const btnDark =
-  "bg-ink hover:bg-ink-hover text-white border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer whitespace-nowrap";
+  "bg-ink hover:bg-ink-hover text-on-ink border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer whitespace-nowrap";
 
 function when(d: Date) {
   const days = Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
@@ -347,7 +347,7 @@ export function Workspace({
 
   const tabCls = (on: boolean) =>
     `border-0 px-3.5 py-[7px] rounded-lg text-[13px] font-bold cursor-pointer whitespace-nowrap flex gap-1.5 items-center ${
-      on ? "bg-white text-ink shadow-[0_1px_2px_rgba(15,27,61,.12)]" : "bg-transparent text-subtle"
+      on ? "bg-surface text-ink shadow-pill" : "bg-transparent text-subtle"
     }`;
 
   return (
@@ -359,7 +359,7 @@ export function Workspace({
             {building ? (
               <Spinner className="w-8 h-8 border-[3px]" />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-ink text-white grid place-items-center font-extrabold text-[14px] flex-none">
+              <div className="w-8 h-8 rounded-lg bg-ink text-on-ink grid place-items-center font-extrabold text-[14px] flex-none">
                 {(job.company || job.title || hostOf(job.url))[0]?.toUpperCase()}
               </div>
             )}
@@ -399,7 +399,7 @@ export function Workspace({
             <>
 
               {!base && (
-                <div className="bg-white border border-dashed border-[#b9c6de] rounded-[14px] px-[18px] py-4 flex flex-col gap-2">
+                <div className="bg-surface border border-dashed border-line-dash rounded-[14px] px-[18px] py-4 flex flex-col gap-2">
                   <div className="font-bold text-[14px]">Start with your base resume</div>
                   <div className="text-[12.5px] text-subtle">
                     Upload a PDF or DOCX once. Every tailored version is built from it.
@@ -428,7 +428,7 @@ export function Workspace({
                     onChange={(e) => setUrl(e.target.value)}
                     disabled={starting || !base}
                     placeholder="https://jobs.example.com/senior-product-designer"
-                    className="w-full box-border border border-line-2 rounded-[10px] text-[14px] pl-3 pr-[46px] py-[11px] bg-white text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
+                    className="w-full box-border border border-line-2 rounded-[10px] text-[14px] pl-3 pr-[46px] py-[11px] bg-surface text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
                   />
                   <button
                     type="submit"
@@ -471,7 +471,7 @@ export function Workspace({
               {history.length > 0 && (
                 <section className="flex flex-col gap-2">
                   <h3 className="m-0 eyebrow">Recent</h3>
-                  <div className="bg-white border border-line-2 rounded-[14px] p-1.5 flex flex-col">
+                  <div className="bg-surface border border-line-2 rounded-[14px] p-1.5 flex flex-col">
                     {history.map((h, i) => (
                       <JobRow key={h.id} h={h} i={i} />
                     ))}
@@ -492,7 +492,7 @@ export function Workspace({
           )}
 
           {job && failed && (
-            <div className="bg-white border border-[#f1c4c4] rounded-[14px] px-[18px] py-4 flex flex-col gap-3">
+            <div className="bg-surface border border-bad-line rounded-[14px] px-[18px] py-4 flex flex-col gap-3">
               <div className="flex gap-2.5 items-start">
                 <span className="w-5 h-5 rounded-full bg-bad-bg text-bad grid place-items-center text-[12px] font-extrabold flex-none">
                   !
@@ -563,7 +563,7 @@ export function Workspace({
                 className={`w-[34px] h-[34px] grid place-items-center rounded-[9px] border cursor-pointer ${
                   editingHere
                     ? "bg-user-del border-user-mark text-user-ink"
-                    : "bg-white border-line-2 text-subtle hover:bg-canvas hover:text-ink"
+                    : "bg-surface border-line-2 text-subtle hover:bg-canvas hover:text-ink"
                 }`}
               >
                 <svg
@@ -617,17 +617,17 @@ export function Workspace({
                     onClick={() => setShowDiff(!showDiff)}
                     className="flex items-center gap-2 whitespace-nowrap border px-3 py-[7px] rounded-[9px] text-[13px] font-semibold cursor-pointer"
                     style={{
-                      background: showDiff ? "#e6f7ee" : "#fff",
-                      borderColor: showDiff ? "#9fe0bb" : "#dbe2ef",
-                      color: showDiff ? "#158a48" : "#0f1b3d",
+                      background: showDiff ? "var(--color-ok-bg)" : "var(--color-surface)",
+                      borderColor: showDiff ? "var(--color-ok-line)" : "var(--color-line-2)",
+                      color: showDiff ? "var(--color-ok-ink)" : "var(--color-ink)",
                     }}
                   >
                     <span
                       className="w-[26px] h-4 rounded-full relative transition-colors"
-                      style={{ background: showDiff ? "#22b55e" : "#c5cfe2" }}
+                      style={{ background: showDiff ? "var(--color-ok)" : "var(--color-line-3)" }}
                     >
                       <span
-                        className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-[left] shadow-[0_1px_2px_rgba(0,0,0,.2)]"
+                        className="absolute top-0.5 w-3 h-3 rounded-full bg-surface transition-[left] shadow-knob"
                         style={{ left: showDiff ? 12 : 2 }}
                       />
                     </span>
@@ -639,7 +639,7 @@ export function Workspace({
                   <button
                     onClick={() => setPromptOpen(!promptOpen)}
                     className={`${btnGhost} py-[7px]`}
-                    style={{ background: promptOpen ? "#eef3fc" : undefined }}
+                    style={{ background: promptOpen ? "var(--color-brand-tint)" : undefined }}
                   >
                     Prompt
                   </button>
@@ -658,7 +658,7 @@ export function Workspace({
           </div>
 
           {promptOpen && (
-            <div className="bg-white border-b border-line px-5 py-3.5 flex flex-col gap-2.5 flex-none">
+            <div className="bg-surface border-b border-line px-5 py-3.5 flex flex-col gap-2.5 flex-none">
               <div className="flex justify-between items-center">
                 <div>
                   <div className="font-bold text-[13px]">Tailoring prompt</div>
@@ -695,13 +695,13 @@ export function Workspace({
           {tab === "resume" && (
             <div className="flex-1 min-h-0 overflow-y-auto px-8 pt-7 pb-20 flex flex-col items-center gap-3.5">
               {editing && (
-                <div className="w-full max-w-[720px] text-[12.5px] text-muted bg-white border border-line-2 rounded-[10px] px-3.5 py-2">
+                <div className="w-full max-w-[720px] text-[12.5px] text-muted bg-surface border border-line-2 rounded-[10px] px-3.5 py-2">
                   Click any line to edit it. Your changes are tracked separately from the AI&apos;s and shown in{" "}
                   <span className={`${DIFF_STYLES.u.swatch} rounded-[3px] px-1`}>purple</span>.
                 </div>
               )}
               {stale && !editing && !inFlight && (
-                <div className="w-full max-w-[720px] flex gap-3 items-center text-[12.5px] bg-warn-bg border border-[#f0d9a8] text-[#6b4a00] rounded-[10px] px-3.5 py-2.5">
+                <div className="w-full max-w-[720px] flex gap-3 items-center text-[12.5px] bg-warn-bg border border-warn-line text-warn-ink-2 rounded-[10px] px-3.5 py-2.5">
                   <span className="flex-1">
                     <b>Your base resume changed</b> since this was tailored, so this version may be missing your latest
                     edits or ordering.
@@ -720,7 +720,7 @@ export function Workspace({
                 </div>
               )}
               {showDiff && hasResume && !editing && !inFlight && (
-                <div className="w-full max-w-[720px] flex gap-x-4 gap-y-1 flex-wrap items-center text-[12.5px] text-muted bg-white border border-line-2 rounded-[10px] px-3.5 py-2">
+                <div className="w-full max-w-[720px] flex gap-x-4 gap-y-1 flex-wrap items-center text-[12.5px] text-muted bg-surface border border-line-2 rounded-[10px] px-3.5 py-2">
                   <span className="font-bold text-ink">
                     {changes.total} edits{changes.user > 0 && ` · ${changes.user} yours`}
                   </span>
@@ -755,7 +755,7 @@ export function Workspace({
           {tab === "cover" && job && (
             <div className="flex-1 min-h-0 overflow-y-auto px-8 pt-7 pb-20 flex flex-col items-center gap-4">
               {coverDraft === null && (
-                <div className="w-full max-w-[720px] bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5">
+                <div className="w-full max-w-[720px] bg-surface border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5">
                   <div className="flex justify-between items-baseline">
                     <div className="font-bold text-[14px]">Cover letter prompt</div>
                     <span className="text-[12px] text-faint">Optional · nothing is generated until you ask</span>
@@ -792,7 +792,7 @@ export function Workspace({
               )}
 
               {coverDraft !== null ? (
-                <article className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 text-[14.5px] leading-[1.7] shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)] outline-2 outline-dashed outline-user-mark outline-offset-4">
+                <article className="w-full max-w-[720px] bg-surface rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 text-[14.5px] leading-[1.7] shadow-paper outline-2 outline-dashed outline-user-mark outline-offset-4">
                   <div className="mb-6">
                     {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                   </div>
@@ -810,20 +810,20 @@ export function Workspace({
                   </p>
                 </article>
               ) : coverBusy ? (
-                <div className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border flex flex-col gap-3">
+                <div className="w-full max-w-[720px] bg-surface rounded-[4px] px-16 py-14 box-border flex flex-col gap-3">
                   <div className="text-[12px] text-brand font-semibold mb-2">
                     Writing… you can switch tabs; it keeps going in the background.
                   </div>
                   {[92, 100, 96, 60, 100, 88, 40].map((w, i) => (
                     <div
                       key={i}
-                      className="h-3 rounded-md bg-[#e6ebf5] animate-pulse-soft"
+                      className="h-3 rounded-md bg-skeleton animate-pulse-soft"
                       style={{ width: `${w}%`, animationDelay: `${i * 0.12}s` }}
                     />
                   ))}
                 </div>
               ) : cover ? (
-                <article className="print-doc w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 text-[14.5px] leading-[1.7] shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)]">
+                <article className="print-doc w-full max-w-[720px] bg-surface rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 text-[14.5px] leading-[1.7] shadow-paper">
                   <div className="mb-6">
                     {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                   </div>
@@ -874,7 +874,7 @@ function ResumeSkeleton({ name, contact }: { name?: string; contact?: string }) 
     return (
       <div
         key={n}
-        className={`${h} rounded-md bg-[#e6ebf5] animate-pulse-soft`}
+        className={`${h} rounded-md bg-skeleton animate-pulse-soft`}
         style={{ width: typeof w === "number" ? `${w}%` : w, animationDelay: `${(n % 12) * 0.1}s` }}
       />
     );
@@ -883,7 +883,7 @@ function ResumeSkeleton({ name, contact }: { name?: string; contact?: string }) 
     <article
       aria-busy="true"
       aria-label="Re-tailoring your resume"
-      className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)]"
+      className="w-full max-w-[720px] bg-surface rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 shadow-paper"
     >
       <div className="font-sans text-[12px] text-brand font-semibold mb-6 flex items-center gap-2">
         <Spinner className="w-3.5 h-3.5" />
@@ -932,7 +932,7 @@ function ProgressCard({
   const current = steps.indexOf(stage);
   const progress = stage === "done" ? 1 : Math.max(0, current) / steps.length;
   return (
-    <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex flex-col gap-3.5">
+    <div className="bg-surface border border-line-2 rounded-[14px] px-[18px] py-4 flex flex-col gap-3.5">
       <div className="text-[12px] text-subtle break-all">
         {pasted && <span className="text-faint">Pasted description{url ? " · " : ""}</span>}
         {url}
@@ -944,10 +944,10 @@ function ProgressCard({
           return (
             <li key={st} className="flex gap-2.5 items-center" style={{ opacity: done || active ? 1 : 0.45 }}>
               <div
-                className="w-5 h-5 rounded-full grid place-items-center flex-none text-white text-[11px] font-extrabold border-2 box-border"
+                className={`w-5 h-5 rounded-full grid place-items-center flex-none text-[11px] font-extrabold border-2 box-border ${done || active ? "text-white" : "text-faint"}`}
                 style={{
-                  background: done ? "#22b55e" : active ? "#1a6fe8" : "#fff",
-                  borderColor: done ? "#22b55e" : active ? "#1a6fe8" : "#d3dae8",
+                  background: done ? "var(--color-ok)" : active ? "var(--color-brand)" : "var(--color-surface)",
+                  borderColor: done ? "var(--color-ok)" : active ? "var(--color-brand)" : "var(--color-line-3)",
                 }}
               >
                 {done ? "✓" : i + 1}
@@ -1027,7 +1027,7 @@ function JobRow({
         ) : (
           <div
             className="w-[32px] h-[32px] flex-none rounded-[9px] text-white grid place-items-center font-extrabold text-[12.5px]"
-            style={{ background: failed ? "#b23b3b" : TINTS[i % TINTS.length] }}
+            style={{ background: failed ? "var(--color-bad)" : TINTS[i % TINTS.length] }}
           >
             {failed ? "!" : (live.company || title)[0]?.toUpperCase()}
           </div>
@@ -1067,7 +1067,7 @@ function HistoryMenu({ history, currentId }: { history: JobSummary[]; currentId:
         className={`w-[34px] h-[34px] grid place-items-center rounded-[9px] border cursor-pointer ${
           open
             ? "bg-canvas border-line-3 text-ink"
-            : "bg-white border-line-2 text-subtle hover:bg-canvas hover:text-ink"
+            : "bg-surface border-line-2 text-subtle hover:bg-canvas hover:text-ink"
         }`}
       >
         <svg
@@ -1089,7 +1089,7 @@ function HistoryMenu({ history, currentId }: { history: JobSummary[]; currentId:
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-20 w-[360px] max-h-[60vh] overflow-y-auto bg-white border border-line-2 rounded-[12px] shadow-[0_8px_24px_rgba(15,27,61,.12)] p-1.5">
+          <div className="absolute right-0 top-10 z-20 w-[360px] max-h-[60vh] overflow-y-auto bg-surface border border-line-2 rounded-[12px] shadow-menu p-1.5">
             <div className="eyebrow px-2 pt-1.5 pb-2">History</div>
             {history.length === 0 && <div className="px-2 pb-2 text-[13px] text-subtle">No previous jobs yet.</div>}
             {history.map((h, i) => {
@@ -1139,9 +1139,9 @@ function JobPanel({
   }
   const ready = picked.length > 0 && picked.every((k) => details[k]?.trim());
   const reqStyle = {
-    hit: { glyph: "✓", bg: "#e6f7ee", fg: "#158a48" },
-    partial: { glyph: "~", bg: "#fff4dd", fg: "#a56a00" },
-    miss: { glyph: "–", bg: "#fde8e8", fg: "#b23b3b" },
+    hit: { glyph: "✓", bg: "var(--color-ok-bg)", fg: "var(--color-ok-ink)" },
+    partial: { glyph: "~", bg: "var(--color-warn-bg)", fg: "var(--color-warn-ink)" },
+    miss: { glyph: "–", bg: "var(--color-bad-bg)", fg: "var(--color-bad)" },
   } as const;
 
   return (
@@ -1151,7 +1151,7 @@ function JobPanel({
           {pills.map((p) => (
             <span
               key={p}
-              className="text-[12px] font-semibold bg-white border border-line-2 px-[9px] py-1 rounded-full"
+              className="text-[12px] font-semibold bg-surface border border-line-2 px-[9px] py-1 rounded-full"
             >
               {p}
             </span>
@@ -1159,18 +1159,18 @@ function JobPanel({
         </div>
       )}
 
-      <div className="bg-white border border-line-2 rounded-[14px] px-[18px] py-4 flex gap-4 items-center">
+      <div className="bg-surface border border-line-2 rounded-[14px] px-[18px] py-4 flex gap-4 items-center">
         <div
           className="relative w-16 h-16 flex-none rounded-full grid place-items-center"
           style={{
             // Base score in muted green, the tailored gain layered on top in brand blue.
             background:
               after !== null && delta > 0
-                ? `conic-gradient(#22b55e ${Math.round(job.score * 3.6)}deg, #1a6fe8 ${Math.round(job.score * 3.6)}deg ${Math.round(after * 3.6)}deg, #e6ebf5 0)`
-                : `conic-gradient(#22b55e ${Math.round(ring * 3.6)}deg, #e6ebf5 0)`,
+                ? `conic-gradient(var(--color-ok) ${Math.round(job.score * 3.6)}deg, var(--color-brand) ${Math.round(job.score * 3.6)}deg ${Math.round(after * 3.6)}deg, var(--color-skeleton) 0)`
+                : `conic-gradient(var(--color-ok) ${Math.round(ring * 3.6)}deg, var(--color-skeleton) 0)`,
           }}
         >
-          <div className="w-[50px] h-[50px] rounded-full bg-white grid place-items-center font-extrabold text-[16px]">
+          <div className="w-[50px] h-[50px] rounded-full bg-surface grid place-items-center font-extrabold text-[16px]">
             {ring}
           </div>
         </div>
@@ -1205,7 +1205,7 @@ function JobPanel({
               return (
                 <li
                   key={i}
-                  className="flex gap-2.5 items-start bg-white border border-line rounded-[10px] px-3 py-[9px] text-[13px] leading-[1.45]"
+                  className="flex gap-2.5 items-start bg-surface border border-line rounded-[10px] px-3 py-[9px] text-[13px] leading-[1.45]"
                 >
                   <span
                     className="w-[18px] h-[18px] rounded-full flex-none grid place-items-center text-[11px] font-extrabold mt-px"
@@ -1241,7 +1241,7 @@ function JobPanel({
                 className={`text-[12px] font-semibold border border-dashed px-2 py-[3px] rounded-md cursor-pointer ${
                   on
                     ? "bg-bad-bg text-bad border-bad"
-                    : "bg-white text-bad border-[#e4b2b2] hover:border-bad hover:bg-bad-bg"
+                    : "bg-surface text-bad border-bad-line-2 hover:border-bad hover:bg-bad-bg"
                 }`}
               >
                 {on ? "✓ " : ""}
@@ -1263,7 +1263,7 @@ function JobPanel({
                 setDetails({});
               }
             }}
-            className="bg-white border border-line-2 rounded-[12px] p-3.5 flex flex-col gap-3"
+            className="bg-surface border border-line-2 rounded-[12px] p-3.5 flex flex-col gap-3"
           >
             {picked.map((k, i) => (
               <div key={k} className="flex flex-col gap-1.5">
@@ -1334,7 +1334,7 @@ function JobPanel({
           <span className="text-[12px] text-brand font-semibold">{rawOpen ? "Hide" : "Show"}</span>
         </button>
         {rawOpen && (
-          <div className="bg-white border border-line rounded-[10px] px-4 py-3.5 text-[12.5px] leading-[1.6] text-muted whitespace-pre-wrap font-mono">
+          <div className="bg-surface border border-line rounded-[10px] px-4 py-3.5 text-[12.5px] leading-[1.6] text-muted whitespace-pre-wrap font-mono">
             {job.raw}
           </div>
         )}
@@ -1418,12 +1418,12 @@ function PasteJobModal({
 
   return (
     <>
-      <div onClick={() => !busy && onClose()} className="fixed inset-0 z-30 bg-[rgba(15,27,61,.45)]" />
+      <div onClick={() => !busy && onClose()} className="fixed inset-0 z-30 bg-scrim-strong" />
       <div
         role="dialog"
         aria-modal
         aria-label="Paste a job description"
-        className="fixed z-30 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] max-w-[94vw] h-[84vh] max-h-[860px] bg-white rounded-[16px] shadow-[0_24px_64px_rgba(15,27,61,.28)] flex flex-col overflow-hidden"
+        className="fixed z-30 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] max-w-[94vw] h-[84vh] max-h-[860px] bg-surface rounded-[16px] shadow-modal flex flex-col overflow-hidden"
       >
         <header className="flex items-start gap-4 px-6 pt-5 pb-4 border-b border-line flex-none">
           <div className="min-w-0 flex-1">
@@ -1461,7 +1461,7 @@ function PasteJobModal({
               onChange={(e) => setUrl(e.target.value)}
               disabled={busy}
               placeholder="https://www.linkedin.com/jobs/view/…"
-              className="w-full box-border border border-line-2 rounded-[10px] text-[13.5px] px-3 py-[9px] bg-white text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
+              className="w-full box-border border border-line-2 rounded-[10px] text-[13.5px] px-3 py-[9px] bg-surface text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
             />
           </div>
           <div className="flex-1 min-h-0 flex flex-col gap-1.5">

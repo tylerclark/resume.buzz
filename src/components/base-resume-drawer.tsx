@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { EMPTY_RESUME, type Entry, type Fact, type Resume } from "@/lib/types";
 import { AutoTextarea } from "./auto-textarea";
 
-const card = "bg-white border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5";
+const card = "bg-surface border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5";
 const field =
   "w-full box-border border border-line rounded-[10px] px-3.5 py-3 text-[13.5px] leading-[1.6] resize-none overflow-hidden text-ink bg-field";
 const small = "w-full box-border border border-line rounded-lg px-2.5 py-1.5 text-[12.5px] text-ink bg-field min-w-0";
@@ -20,7 +20,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const ghost =
-  "bg-white border border-line-2 text-ink px-3.5 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer hover:bg-canvas disabled:opacity-60";
+  "bg-surface border border-line-2 text-ink px-3.5 py-2 rounded-[9px] text-[13px] font-semibold cursor-pointer hover:bg-canvas disabled:opacity-60";
 
 function move<T>(list: T[], from: number, to: number) {
   const [item] = list.splice(from, 1);
@@ -53,7 +53,7 @@ function MoveButtons({
           aria-label={label}
           disabled={to < 0 || to >= count}
           onClick={() => onMove(to)}
-          className="w-7 h-7 grid place-items-center bg-white border border-line-2 rounded-md text-[13px] text-subtle cursor-pointer hover:bg-canvas hover:text-ink disabled:opacity-35 disabled:cursor-default"
+          className="w-7 h-7 grid place-items-center bg-surface border border-line-2 rounded-md text-[13px] text-subtle cursor-pointer hover:bg-canvas hover:text-ink disabled:opacity-35 disabled:cursor-default"
         >
           {glyph}
         </button>
@@ -211,13 +211,13 @@ export function BaseResumeDrawer({
 
   return (
     <>
-      <div onClick={close} className="fixed inset-0 z-20 bg-[rgba(15,27,61,.35)]" />
+      <div onClick={close} className="fixed inset-0 z-20 bg-scrim" />
       <div
         role="dialog"
         aria-label="Base resume"
-        className="fixed top-0 right-0 bottom-0 z-20 w-[1080px] max-w-[96vw] bg-canvas shadow-[-12px_0_40px_rgba(15,27,61,.18)] flex flex-col"
+        className="fixed top-0 right-0 bottom-0 z-20 w-[1080px] max-w-[96vw] bg-canvas shadow-drawer flex flex-col"
       >
-        <header className="flex items-center gap-4 px-6 py-3.5 bg-white border-b border-line flex-none">
+        <header className="flex items-center gap-4 px-6 py-3.5 bg-surface border-b border-line flex-none">
           <div>
             <div className="font-extrabold text-[15px]">Base resume</div>
             <div className="text-[12px] text-subtle">Source of truth for every tailored version</div>
@@ -226,7 +226,7 @@ export function BaseResumeDrawer({
           <button
             onClick={save}
             disabled={status === "saving" || status === "importing"}
-            className={`${dirty ? "" : "ml-auto "}bg-ink hover:bg-ink-hover text-white border-0 rounded-[9px] px-3.5 py-[9px] text-[13px] font-bold cursor-pointer disabled:opacity-60`}
+            className={`${dirty ? "" : "ml-auto "}bg-ink hover:bg-ink-hover text-on-ink border-0 rounded-[9px] px-3.5 py-[9px] text-[13px] font-bold cursor-pointer disabled:opacity-60`}
           >
             {status === "saving" ? "Saving…" : status === "saved" ? "Saved ✓" : "Save"}
           </button>
@@ -240,7 +240,7 @@ export function BaseResumeDrawer({
         </header>
 
         <main className="flex-1 overflow-y-auto w-full box-border px-8 pt-6 pb-20 flex flex-col gap-5">
-          <div className="flex gap-2.5 items-center bg-white border border-dashed border-[#b9c6de] rounded-[14px] px-[18px] py-4">
+          <div className="flex gap-2.5 items-center bg-surface border border-dashed border-line-dash rounded-[14px] px-[18px] py-4">
             <div className="flex-1">
               <div className="font-bold text-[14px]">{isNew ? "Upload PDF or DOCX" : "Re-upload PDF or DOCX"}</div>
               <div className="text-[12.5px] text-subtle">

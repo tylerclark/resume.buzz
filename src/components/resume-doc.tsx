@@ -106,7 +106,7 @@ export function countChanges(m: DocModel) {
 const MARK = "rounded-[3px] px-0.5 [box-decoration-break:clone]";
 export const DIFF_STYLES: Record<Exclude<Kind, "s">, { cls: string; label: string; swatch: string }> = {
   a: { cls: `diff-add bg-ok-mark ${MARK}`, label: "AI added", swatch: "bg-ok-mark" },
-  d: { cls: `diff-del bg-bad-mark text-[#9a3232] line-through ${MARK}`, label: "AI removed", swatch: "bg-bad-mark" },
+  d: { cls: `diff-del bg-bad-mark text-bad-ink-2 line-through ${MARK}`, label: "AI removed", swatch: "bg-bad-mark" },
   u: { cls: `diff-add bg-user-mark ${MARK}`, label: "You added", swatch: "bg-user-mark" },
   x: { cls: `diff-del bg-user-del text-user-ink line-through ${MARK}`, label: "You removed", swatch: "bg-user-del" },
 };
@@ -139,7 +139,7 @@ export function ResumeDoc({
 }) {
   return (
     <article
-      className="print-doc w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 transition-opacity duration-300 shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)]"
+      className="print-doc w-full max-w-[720px] bg-surface rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 transition-opacity duration-300 shadow-paper"
       style={{ opacity: dim ? 0.4 : 1 }}
     >
       <header className="border-b-[1.5px] border-ink-2 pb-3.5 mb-5">

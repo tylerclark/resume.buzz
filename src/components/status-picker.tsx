@@ -50,7 +50,7 @@ export function StatusPicker({ jobId, status: initial }: { jobId: string; status
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div
             role="menu"
-            className="absolute right-0 top-8 z-40 w-[210px] bg-white border border-line-2 rounded-[10px] shadow-[0_8px_24px_rgba(15,27,61,.12)] p-1.5"
+            className="absolute right-0 top-8 z-40 w-[210px] bg-surface border border-line-2 rounded-[10px] shadow-menu p-1.5"
           >
             {(Object.keys(JOB_STATUSES) as JobStatus[]).map((s) => (
               <button

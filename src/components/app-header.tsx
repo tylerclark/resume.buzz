@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { THEMES, useTheme, type Theme } from "./theme";
 import { JOB_STAGES, stageInFlight } from "@/lib/types";
 import { isBusy, shownScore, useJobStatuses, type JobStatus } from "./job-status";
 import { Logo } from "./logo";
@@ -27,7 +28,7 @@ export function hostOf(url: string) {
 
 export function AppHeader({ user }: { user: { name: string; email: string } }) {
   return (
-    <header className="flex items-center gap-3 pl-5 pr-5 bg-white border-b border-line flex-none h-[64px] min-w-0">
+    <header className="flex items-center gap-3 pl-5 pr-5 bg-surface border-b border-line flex-none h-[64px] min-w-0">
       <Link href="/" className="hover:no-underline flex-none">
         <Logo height={26} priority />
       </Link>
@@ -154,7 +155,7 @@ function TabChip({
       className={`relative flex items-center gap-2 h-9 pl-2.5 pr-1.5 rounded-[9px] border max-w-[220px] min-w-[120px] flex-none transition-colors ${
         active
           ? "bg-canvas border-line-2 text-ink"
-          : "bg-white border-transparent text-subtle hover:bg-canvas hover:text-ink"
+          : "bg-surface border-transparent text-subtle hover:bg-canvas hover:text-ink"
       }`}
     >
       <Link
@@ -229,7 +230,7 @@ function TabIcon({
       </span>
     );
   return (
-    <span className="flex-none w-[18px] h-[18px] rounded-[5px] bg-ink text-white grid place-items-center text-[10.5px] leading-none font-extrabold">
+    <span className="flex-none w-[18px] h-[18px] rounded-[5px] bg-ink text-on-ink grid place-items-center text-[10.5px] leading-none font-extrabold">
       {(status?.company || status?.title || "?")[0]?.toUpperCase()}
     </span>
   );
@@ -263,11 +264,24 @@ export function Spinner({ className = "" }: { className?: string }) {
 function UserMenu({ user }: { user: { name: string; email: string } }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
         title={user.email}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
         className="w-8 h-8 rounded-full bg-brand text-white grid place-items-center text-[12px] font-bold border-0 cursor-pointer"
       >
         {initials(user.name || user.email)}
@@ -275,9 +289,15 @@ function UserMenu({ user }: { user: { name: string; email: string } }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-20 bg-white border border-line-2 rounded-[10px] shadow-[0_8px_24px_rgba(15,27,61,.12)] p-1.5 min-w-[200px]">
+          <div
+            role="menu"
+            className="absolute right-0 top-10 z-20 bg-surface border border-line-2 rounded-[10px] shadow-menu p-1.5 min-w-[220px]"
+          >
             <div className="px-2.5 py-2 text-[12px] text-subtle truncate">{user.email}</div>
+            <ThemePicker />
+            <div className="my-1 border-t border-line" />
             <button
+              role="menuitem"
               onClick={async () => {
                 await authClient.signOut();
                 router.replace("/login");
@@ -291,5 +311,69 @@ function UserMenu({ user }: { user: { name: string; email: string } }) {
         </>
       )}
     </div>
+  );
+}
+
+const THEME_LABELS: Record<Theme, string> = { light: "Light", dark: "Dark", system: "System" };
+
+function ThemePicker() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <div className="px-2.5 pt-1 pb-2">
+      <div className="text-[11px] font-bold text-faint uppercase tracking-[.06em] mb-1.5">Theme</div>
+      <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-0.5 p-0.5 bg-well rounded-lg">
+        {THEMES.map((t) => {
+          const on = t === theme;
+          return (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setTheme(t)}
+              title={t === "system" ? "Follow your OS setting" : THEME_LABELS[t]}
+              className={`flex flex-col items-center gap-1 py-1.5 rounded-md border-0 cursor-pointer text-[11px] font-semibold transition-colors ${
+                on ? "bg-surface text-ink shadow-pill" : "bg-transparent text-subtle hover:text-ink"
+              }`}
+            >
+              <ThemeIcon theme={t} className="w-4 h-4" />
+              {THEME_LABELS[t]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ThemeIcon({ theme, className = "" }: { theme: Theme; className?: string }) {
+  const common = {
+    "aria-hidden": true,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    className: `block ${className}`,
+  };
+  if (theme === "light")
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+      </svg>
+    );
+  if (theme === "dark")
+    return (
+      <svg {...common}>
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+      </svg>
+    );
+  return (
+    <svg {...common}>
+      <rect x="2" y="4" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 18v3" />
+    </svg>
   );
 }

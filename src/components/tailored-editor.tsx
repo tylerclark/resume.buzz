@@ -88,7 +88,7 @@ export function TailoredEditor({
   };
 
   return (
-    <article className="w-full max-w-[720px] bg-white rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 shadow-[0_1px_3px_rgba(15,27,61,.08),0_12px_32px_rgba(15,27,61,.06)] outline-2 outline-dashed outline-user-mark outline-offset-4">
+    <article className="w-full max-w-[720px] bg-surface rounded-[4px] px-16 py-14 box-border font-serif text-ink-2 shadow-paper outline-2 outline-dashed outline-user-mark outline-offset-4">
       <header className="border-b-[1.5px] border-ink-2 pb-3.5 mb-5">
         <div className="text-[28px] font-semibold tracking-[-.01em]">{name || "Your name"}</div>
         <div className="mt-1 font-sans text-muted">

@@ -1,41 +1,137 @@
 @import "tailwindcss";
 
+/* Dark mode is a class on <html>, set before paint by ThemeScript (see components/theme.tsx). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: var(--font-jakarta), system-ui, sans-serif;
   --font-serif: var(--font-source-serif), Georgia, serif;
   --font-mono: ui-monospace, Menlo, monospace;
 
+  /* Text */
   --color-ink: #0f1b3d;
   --color-ink-2: #1b2340;
   --color-ink-hover: #1a2b5c;
+  --color-on-ink: #ffffff;
   --color-muted: #4a5578;
   --color-subtle: #6b7592;
   --color-faint: #8a94ad;
-  --color-line: #e3e8f2;
-  --color-line-2: #dbe2ef;
-  --color-line-3: #c5cfe2;
+
+  /* Surfaces */
   --color-canvas: #f4f6fb;
+  --color-surface: #ffffff;
   --color-panel: #f9fafd;
   --color-well: #eef1f7;
   --color-field: #fafbfe;
   --color-chip: #e9eef8;
+  --color-skeleton: #e6ebf5;
+  --color-scrim: rgba(15, 27, 61, 0.35);
+  --color-scrim-strong: rgba(15, 27, 61, 0.45);
+  --color-thumb: #d3dae8;
+
+  /* Lines */
+  --color-line: #e3e8f2;
+  --color-line-2: #dbe2ef;
+  --color-line-3: #c5cfe2;
+  --color-line-dash: #b9c6de;
+
+  /* Brand */
   --color-brand: #1a6fe8;
   --color-brand-hover: #1560cc;
   --color-brand-tint: #eef3fc;
+  --color-brand-line: #c9dbf7;
+  --color-avatar: #0f1b3d;
+
+  /* Status */
   --color-ok: #22b55e;
   --color-ok-ink: #158a48;
   --color-ok-bg: #e6f7ee;
   --color-ok-mark: #d3f5e1;
+  --color-ok-line: #9fe0bb;
   --color-warn-ink: #a56a00;
+  --color-warn-ink-2: #6b4a00;
   --color-warn-bg: #fff4dd;
+  --color-warn-line: #f0d9a8;
   --color-bad: #b23b3b;
+  --color-bad-ink-2: #9a3232;
   --color-bad-bg: #fde8e8;
   --color-bad-mark: #fde0e0;
+  --color-bad-line: #f1c4c4;
+  --color-bad-line-2: #e4b2b2;
   --color-user-mark: #e7defc;
   --color-user-del: #f1ebfd;
   --color-user-ink: #6b3fb5;
 
+  /* Shadows */
+  --shadow-menu: 0 8px 24px rgba(15, 27, 61, 0.12);
+  --shadow-paper: 0 1px 3px rgba(15, 27, 61, 0.08), 0 12px 32px rgba(15, 27, 61, 0.06);
+  --shadow-modal: 0 24px 64px rgba(15, 27, 61, 0.28);
+  --shadow-drawer: -12px 0 40px rgba(15, 27, 61, 0.18);
+  --shadow-pill: 0 1px 2px rgba(15, 27, 61, 0.12);
+  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
+
   --animate-pulse-soft: rbpulse 1.2s infinite;
+}
+
+/* Dark palette. Print always uses the light palette so a downloaded PDF is ink on paper. */
+@media screen {
+  html.dark {
+    --color-ink: #e6eaf5;
+    --color-ink-2: #dde2ee;
+    --color-ink-hover: #ffffff;
+    --color-on-ink: #0f1b3d;
+    --color-muted: #aab3cc;
+    --color-subtle: #8e98b5;
+    --color-faint: #6e789a;
+
+    --color-canvas: #0b1020;
+    --color-surface: #131a2e;
+    --color-panel: #101627;
+    --color-well: #1a2238;
+    --color-field: #0f1526;
+    --color-chip: #1d2740;
+    --color-skeleton: #222c46;
+    --color-scrim: rgba(0, 0, 0, 0.55);
+    --color-scrim-strong: rgba(0, 0, 0, 0.65);
+    --color-thumb: #2a3552;
+
+    --color-line: #1f2941;
+    --color-line-2: #28334f;
+    --color-line-3: #354260;
+    --color-line-dash: #3a4868;
+
+    --color-brand: #4d8ff0;
+    --color-brand-hover: #6aa2f5;
+    --color-brand-tint: #16264a;
+    --color-brand-line: #26427a;
+    --color-avatar: #3b4a75;
+
+    --color-ok: #2ec66b;
+    --color-ok-ink: #5fd68f;
+    --color-ok-bg: #0f2d1e;
+    --color-ok-mark: #164a2d;
+    --color-ok-line: #1f6b41;
+    --color-warn-ink: #f0b94b;
+    --color-warn-ink-2: #f5cd7a;
+    --color-warn-bg: #33270b;
+    --color-warn-line: #5c4715;
+    --color-bad: #f07171;
+    --color-bad-ink-2: #f59a9a;
+    --color-bad-bg: #3a1818;
+    --color-bad-mark: #532222;
+    --color-bad-line: #6b2a2a;
+    --color-bad-line-2: #7a3232;
+    --color-user-mark: #3b2a63;
+    --color-user-del: #2b2247;
+    --color-user-ink: #c4a4f8;
+
+    --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-paper: 0 1px 3px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
+    --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.5);
+    --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
 }
 
 @keyframes rbpulse {
@@ -49,6 +145,15 @@
 }
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
+  @media screen {
+    html.dark {
+      color-scheme: dark;
+    }
+  }
+
   body {
     background: var(--color-canvas);
     color: var(--color-ink);
@@ -59,7 +164,7 @@
     color: var(--color-brand);
   }
   a:hover {
-    color: #0f52b8;
+    color: var(--color-brand-hover);
     text-decoration: underline;
   }
 
@@ -73,7 +178,7 @@
     width: 8px;
   }
   ::-webkit-scrollbar-thumb {
-    background: #d3dae8;
+    background: var(--color-thumb);
     border-radius: 8px;
   }
 

@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         <div className="flex justify-center">
           <Logo variant="stacked" height={190} priority />
         </div>
-        <div className="bg-white border border-line-2 rounded-[14px] p-6 flex flex-col gap-4">
+        <div className="bg-surface border border-line-2 rounded-[14px] p-6 flex flex-col gap-4">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="m-0 text-[20px] font-extrabold tracking-[-.02em]">Sign in</h1>

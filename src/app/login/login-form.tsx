@@ -4,7 +4,7 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
 const input =
-  "w-full box-border border border-line-2 rounded-[10px] text-[14px] px-3 py-[11px] bg-white text-ink disabled:opacity-60";
+  "w-full box-border border border-line-2 rounded-[10px] text-[14px] px-3 py-[11px] bg-surface text-ink disabled:opacity-60";
 const primary =
   "bg-brand hover:bg-brand-hover text-white border-0 rounded-[10px] px-4 h-[42px] text-[14px] font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default";
 

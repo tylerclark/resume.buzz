@@ -105,11 +105,11 @@ export type Fact = z.infer<typeof FactSchema>;
 
 export const JOB_STATUSES = {
   not_applied: { label: "Not applied", cls: "bg-well text-subtle border-line-2", closed: false },
-  applied: { label: "Applied", cls: "bg-brand-tint text-brand border-[#c9dbf7]", closed: false },
-  interviewing: { label: "Interviewing", cls: "bg-warn-bg text-warn-ink border-[#f0d9a8]", closed: false },
-  offer: { label: "Offer", cls: "bg-ok-bg text-ok-ink border-[#9fe0bb]", closed: false },
-  rejected: { label: "Rejected", cls: "bg-bad-bg text-bad border-[#f1c4c4]", closed: true },
-  withdrawn: { label: "No longer interested", cls: "bg-white text-faint border-line-2", closed: true },
+  applied: { label: "Applied", cls: "bg-brand-tint text-brand border-brand-line", closed: false },
+  interviewing: { label: "Interviewing", cls: "bg-warn-bg text-warn-ink border-warn-line", closed: false },
+  offer: { label: "Offer", cls: "bg-ok-bg text-ok-ink border-ok-line", closed: false },
+  rejected: { label: "Rejected", cls: "bg-bad-bg text-bad border-bad-line", closed: true },
+  withdrawn: { label: "No longer interested", cls: "bg-surface text-faint border-line-2", closed: true },
 } as const;
 export type JobStatus = keyof typeof JOB_STATUSES;
 export const isJobStatus = (s: unknown): s is JobStatus => typeof s === "string" && s in JOB_STATUSES;
