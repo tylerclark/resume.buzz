@@ -132,7 +132,7 @@ Fill in `.env.local`:
 | --- | --- |
 | `DATABASE_URL` | Neon connection string |
 | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
-| `BETTER_AUTH_URL` | Public origin, `http://localhost:3000` locally |
+| `BETTER_AUTH_URL` | Public origin, `http://localhost:4719` locally |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Resend key and a sender on a verified domain |
 | `ALLOWED_EMAILS` | Comma-separated list of who may sign in. **Empty means nobody**, so add yourself |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway key. On Vercel itself this can be blank; OIDC is used |
@@ -143,7 +143,7 @@ Then:
 
 ```sh
 pnpm db:migrate          # applies drizzle/ migrations to your Neon database
-pnpm dev                 # http://localhost:3000
+pnpm dev                 # http://localhost:4719
 ```
 
 Sign in with an email from `ALLOWED_EMAILS`, add your base resume (import a PDF or DOCX, or type it in), and paste a job.

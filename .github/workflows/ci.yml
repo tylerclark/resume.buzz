@@ -28,7 +28,7 @@ jobs:
           # Placeholders so modules that read env at import time can load. Nothing is called.
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
           BETTER_AUTH_SECRET: ci-only-placeholder-secret-not-used-anywhere-0000
-          BETTER_AUTH_URL: http://localhost:3000
+          BETTER_AUTH_URL: http://localhost:4719
           RESEND_API_KEY: re_placeholder
           AI_GATEWAY_API_KEY: placeholder
           FIRECRAWL_API_KEY: fc-placeholder
