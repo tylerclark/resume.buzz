@@ -424,6 +424,7 @@ export function Workspace({
                   <input
                     id="job-url"
                     type="url"
+                    autoFocus
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     disabled={starting || !base}

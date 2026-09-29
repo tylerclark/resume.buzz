@@ -83,6 +83,8 @@ function TabBar() {
   function openNew() {
     if (active !== NEW_TAB && !confirmLeave()) return;
     if (!tabs.ids.includes(NEW_TAB)) tabs.open(NEW_TAB);
+    // Coming from a job page, the URL input mounts with autoFocus; already on it, nothing remounts.
+    if (active === NEW_TAB) document.getElementById("job-url")?.focus();
     router.push("/");
   }
 
