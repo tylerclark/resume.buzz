@@ -50,8 +50,12 @@ function TabBar() {
   const stripRef = useRef<HTMLDivElement>(null);
 
   // Whatever route we're on is a tab, even if it was opened via a link, the history menu, or a bookmark.
+  // Only on arrival: once it's closed (here, or in another window showing it) it stays closed.
+  const synced = useRef<string | null>(null);
   useEffect(() => {
-    if (active && !tabs.ids.includes(active)) tabs.ensure(active);
+    if (!active || synced.current === active) return;
+    synced.current = active;
+    if (!tabs.ids.includes(active)) tabs.ensure(active);
   }, [active, tabs]);
 
   // Drop tabs whose job no longer exists (deleted elsewhere, or a stale id). If it's the active one, go home.
