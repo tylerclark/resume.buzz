@@ -76,61 +76,61 @@
 /* Dark palette. Print always uses the light palette so a downloaded PDF is ink on paper. */
 @media screen {
   html.dark {
-    --color-ink: #e6eaf5;
-    --color-ink-2: #dde2ee;
+    --color-ink: #ededed;
+    --color-ink-2: #e4e4e4;
     --color-ink-hover: #ffffff;
-    --color-on-ink: #0f1b3d;
-    --color-muted: #aab3cc;
-    --color-subtle: #8e98b5;
-    --color-faint: #6e789a;
+    --color-on-ink: #0a0a0a;
+    --color-muted: #a3a3a3;
+    --color-subtle: #8a8a8a;
+    --color-faint: #6b6b6b;
 
-    --color-canvas: #0b1020;
-    --color-surface: #131a2e;
-    --color-panel: #101627;
-    --color-well: #1a2238;
-    --color-field: #0f1526;
-    --color-chip: #1d2740;
-    --color-skeleton: #222c46;
-    --color-scrim: rgba(0, 0, 0, 0.55);
-    --color-scrim-strong: rgba(0, 0, 0, 0.65);
-    --color-thumb: #2a3552;
+    --color-canvas: #000000;
+    --color-surface: #0f0f0f;
+    --color-panel: #0a0a0a;
+    --color-well: #1a1a1a;
+    --color-field: #0a0a0a;
+    --color-chip: #1f1f1f;
+    --color-skeleton: #222222;
+    --color-scrim: rgba(0, 0, 0, 0.6);
+    --color-scrim-strong: rgba(0, 0, 0, 0.7);
+    --color-thumb: #333333;
 
-    --color-line: #1f2941;
-    --color-line-2: #28334f;
-    --color-line-3: #354260;
-    --color-line-dash: #3a4868;
+    --color-line: #1f1f1f;
+    --color-line-2: #2a2a2a;
+    --color-line-3: #3a3a3a;
+    --color-line-dash: #404040;
 
     --color-brand: #4d8ff0;
     --color-brand-hover: #6aa2f5;
-    --color-brand-tint: #16264a;
-    --color-brand-line: #26427a;
-    --color-avatar: #3b4a75;
+    --color-brand-tint: #101a2b;
+    --color-brand-line: #1f3557;
+    --color-avatar: #3a3a3a;
 
     --color-ok: #2ec66b;
     --color-ok-ink: #5fd68f;
-    --color-ok-bg: #0f2d1e;
-    --color-ok-mark: #164a2d;
-    --color-ok-line: #1f6b41;
+    --color-ok-bg: #0d1f15;
+    --color-ok-mark: #143d25;
+    --color-ok-line: #1c5a35;
     --color-warn-ink: #f0b94b;
     --color-warn-ink-2: #f5cd7a;
-    --color-warn-bg: #33270b;
-    --color-warn-line: #5c4715;
+    --color-warn-bg: #24190a;
+    --color-warn-line: #4d3812;
     --color-bad: #f07171;
     --color-bad-ink-2: #f59a9a;
-    --color-bad-bg: #3a1818;
-    --color-bad-mark: #532222;
-    --color-bad-line: #6b2a2a;
-    --color-bad-line-2: #7a3232;
-    --color-user-mark: #3b2a63;
-    --color-user-del: #2b2247;
+    --color-bad-bg: #261111;
+    --color-bad-mark: #451c1c;
+    --color-bad-line: #5c2424;
+    --color-bad-line-2: #6b2b2b;
+    --color-user-mark: #2f2350;
+    --color-user-del: #221a3a;
     --color-user-ink: #c4a4f8;
 
-    --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.5);
-    --shadow-paper: 0 1px 3px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
-    --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
-    --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.5);
-    --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.7);
+    --shadow-paper: 0 0 0 1px #1f1f1f, 0 12px 32px rgba(0, 0, 0, 0.5);
+    --shadow-modal: 0 0 0 1px #1f1f1f, 0 24px 64px rgba(0, 0, 0, 0.7);
+    --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.6);
+    --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.6);
   }
 }
 
