@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </div>
         <section className="bg-surface border border-line-2 rounded-[14px] p-6 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <h2 className="m-0 text-[15px] font-extrabold tracking-[-.01em]">Open source</h2>
+            <h2 className="m-0 text-[20px] font-extrabold tracking-[-.02em]">Open source</h2>
             <span className="eyebrow rounded-full bg-ok-bg text-ok-ink px-2 py-[2px]">MIT</span>
           </div>
           <p className="m-0 text-[13px] text-muted">
