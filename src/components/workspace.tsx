@@ -981,9 +981,28 @@ function ProgressCard({
                 <div className="text-[13px] font-semibold">{JOB_STAGES[st].label}</div>
                 <div className="text-[11.5px] text-subtle leading-[1.4]">{JOB_STAGES[st].sub}</div>
               </div>
-              <span className={`text-[11px] font-bold whitespace-nowrap ${done ? "text-ok-ink" : "text-brand"}`}>
-                {done ? "done" : active ? "working…" : ""}
-              </span>
+              {done ? (
+                <span
+                  aria-label="done"
+                  className="flex-none w-4 h-4 rounded-full grid place-items-center text-white"
+                  style={{ background: "var(--color-ok)" }}
+                >
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-2.5 h-2.5"
+                  >
+                    <path d="M3 8.5l3 3 7-7" />
+                  </svg>
+                </span>
+              ) : active ? (
+                <Spinner className="w-4! h-4!" />
+              ) : null}
             </li>
           );
         })}
