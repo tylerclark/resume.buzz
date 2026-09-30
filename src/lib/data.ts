@@ -3,7 +3,17 @@ import { and, desc, eq, gt, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { baseResume, job, type Job } from "@/db/schema";
 import { auth } from "./auth";
-import { canonicalJobUrl, STAGE_TIMEOUT_MESSAGE, STAGE_TIMEOUT_MS, stageInFlight, type Fact, type Resume } from "./types";
+import {
+  canonicalJobUrl,
+  DEFAULT_SORT,
+  type Fact,
+  type JobSort,
+  type Resume,
+  type SortDir,
+  STAGE_TIMEOUT_MESSAGE,
+  STAGE_TIMEOUT_MS,
+  stageInFlight,
+} from "./types";
 
 export async function userFromRequest(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -93,25 +103,44 @@ const summaryColumns = {
   updatedAt: job.updatedAt,
 };
 
+// ORDER BY for a job list. Jobs prepared in the background that haven't been looked at yet always come
+// first. Then the chosen key; ties (and everything for "status") fall back to newest first, with the id as
+// a final tiebreak so pagination is stable.
+function jobOrder(sort: JobSort, dir: SortDir) {
+  const key = {
+    // To-do (not applied, or in conversation) → applied → rejected → no longer interested.
+    status: sql`case ${job.status} when 'applied' then 1 when 'rejected' then 2 when 'withdrawn' then 3 else 0 end`,
+    score: sql`coalesce(${job.tailoredScore}, ${job.score})`,
+    applied: job.appliedAt,
+    created: job.createdAt,
+    updated: job.updatedAt,
+    title: sql`lower(nullif(${job.title}, ''))`,
+    company: sql`lower(nullif(${job.company}, ''))`,
+  }[sort];
+  return [
+    sql`(${job.source} <> 'app' and ${job.seenAt} is null) desc`,
+    sql`${key} ${sql.raw(dir)} nulls last`,
+    desc(job.createdAt),
+    desc(job.id),
+  ];
+}
+
 export async function listJobs(userId: string, limit = 12) {
   const rows = await db
     .select(summaryColumns)
     .from(job)
     .where(eq(job.userId, userId))
-    // Jobs prepared in the background that haven't been looked at yet come first; closed jobs (rejected /
-    // no longer interested) sink to the bottom.
-    .orderBy(
-      sql`(${job.source} <> 'app' and ${job.seenAt} is null) desc`,
-      sql`${job.status} in ('rejected', 'withdrawn')`,
-      desc(job.createdAt),
-    )
+    .orderBy(...jobOrder(DEFAULT_SORT.key, DEFAULT_SORT.dir))
     .limit(limit);
   return rows.map(settleStale);
 }
 
-// The Recent list: same ordering as listJobs, optionally filtered by a substring of the title, company
-// or URL, one page at a time.
-export async function searchJobs(userId: string, opts: { q?: string; offset?: number; limit?: number } = {}) {
+// The Recent list: optionally filtered by a substring of the title, company or URL, in the chosen order,
+// one page at a time.
+export async function searchJobs(
+  userId: string,
+  opts: { q?: string; sort?: JobSort; dir?: SortDir; offset?: number; limit?: number } = {},
+) {
   const q = (opts.q ?? "").trim();
   const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
   const offset = Math.max(opts.offset ?? 0, 0);
@@ -125,11 +154,7 @@ export async function searchJobs(userId: string, opts: { q?: string; offset?: nu
         pattern ? or(ilike(job.title, pattern), ilike(job.company, pattern), ilike(job.url, pattern)) : undefined,
       ),
     )
-    .orderBy(
-      sql`(${job.source} <> 'app' and ${job.seenAt} is null) desc`,
-      sql`${job.status} in ('rejected', 'withdrawn')`,
-      desc(job.createdAt),
-    )
+    .orderBy(...jobOrder(opts.sort ?? DEFAULT_SORT.key, opts.dir ?? DEFAULT_SORT.dir))
     .offset(offset)
     .limit(limit + 1);
   const page = rows.slice(0, limit).map(settleStale);

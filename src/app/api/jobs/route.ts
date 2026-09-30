@@ -5,6 +5,10 @@ import { startJob } from "@/lib/pipeline";
 import {
   canonicalJobUrl,
   DEFAULT_PROMPT,
+  DEFAULT_SORT,
+  isJobSort,
+  isSortDir,
+  JOB_SORTS,
   MAX_DESCRIPTION,
   MIN_DESCRIPTION,
   parseJobUrl,
@@ -19,15 +23,21 @@ async function caller(request: Request) {
 }
 
 // Lightweight status for a set of jobs (tab bar + progress polling, and API clients): ?ids=a,b,c
-// Without ids: a page of the user's jobs, newest first, optionally filtered: ?q=acme&offset=25&limit=25
+// Without ids: a page of the user's jobs, optionally filtered and sorted:
+//   ?q=acme&sort=score&dir=desc&offset=25&limit=25   (sort: status | score | applied | created | updated | title | company)
 export async function GET(request: Request) {
   const user = await caller(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const params = new URL(request.url).searchParams;
   if (!params.has("ids")) {
+    const sort = params.get("sort");
+    const dir = params.get("dir");
+    const key = isJobSort(sort) ? sort : DEFAULT_SORT.key;
     const page = await searchJobs(user.id, {
       q: params.get("q") ?? "",
+      sort: key,
+      dir: isSortDir(dir) ? dir : JOB_SORTS[key].dir,
       offset: Number(params.get("offset")) || 0,
       limit: Number(params.get("limit")) || 25,
     });

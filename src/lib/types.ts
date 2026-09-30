@@ -114,6 +114,24 @@ export const JOB_STATUSES = {
 export type JobStatus = keyof typeof JOB_STATUSES;
 export const isJobStatus = (s: unknown): s is JobStatus => typeof s === "string" && s in JOB_STATUSES;
 
+// How the Recent list can be ordered. `dir` is the direction that makes sense by default for each key;
+// the user can flip it. "status" is the working order: jobs still to apply to first, applied further
+// down, rejected below that, and no-longer-interested at the very bottom.
+export const JOB_SORTS = {
+  status: { label: "Status", dir: "asc" },
+  score: { label: "Score", dir: "desc" },
+  applied: { label: "Date applied", dir: "desc" },
+  created: { label: "Date added", dir: "desc" },
+  updated: { label: "Last updated", dir: "desc" },
+  title: { label: "Title", dir: "asc" },
+  company: { label: "Company", dir: "asc" },
+} as const satisfies Record<string, { label: string; dir: SortDir }>;
+export type JobSort = keyof typeof JOB_SORTS;
+export type SortDir = "asc" | "desc";
+export const isJobSort = (s: unknown): s is JobSort => typeof s === "string" && s in JOB_SORTS;
+export const isSortDir = (s: unknown): s is SortDir => s === "asc" || s === "desc";
+export const DEFAULT_SORT: { key: JobSort; dir: SortDir } = { key: "status", dir: "asc" };
+
 // Where a job is in the scrape → extract → score → tailor pipeline. The work runs on the server after the
 // request that started it returns, so any tab (or a fresh page load) can pick up progress by polling.
 export const JOB_STAGES = {
