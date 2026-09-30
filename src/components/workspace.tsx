@@ -27,7 +27,7 @@ import { BaseResumeDrawer } from "./base-resume-drawer";
 import { shownScore, toStatus, useJobStatus, useJobStatusActions } from "./job-status";
 import { StatusPicker, StatusPill } from "./status-picker";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
-import { confirmLeave, NEW_TAB, useLeaveGuard, useTabs } from "./tabs-store";
+import { confirmLeave, useLeaveGuard, useTabs } from "./tabs-store";
 import { TailoredEditor } from "./tailored-editor";
 
 const COVER_CHIPS = [
@@ -94,7 +94,7 @@ export function Workspace({
   const [coverPrompt, setCoverPrompt] = useState(initialJob?.coverPrompt ?? "");
   const [coverDraft, setCoverDraft] = useState<string | null>(null); // non-null = editing the letter (blank line = new paragraph)
 
-  // The URL box on the "new job" tab lives in the tab store so switching tabs doesn't lose it.
+  // The URL box on the Home tab lives in the tab store so switching tabs doesn't lose it.
   const url = tabs.draftUrl;
   const setUrl = tabs.setDraftUrl;
 
@@ -189,8 +189,8 @@ export function Workspace({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
-      // The "new job" tab becomes this job's tab; the pipeline keeps going on the server.
-      tabs.replace(NEW_TAB, body.id);
+      // Open a tab for the new job next to Home; the pipeline keeps going on the server.
+      tabs.start(body.id);
       router.replace(`/j/${body.id}`);
       return true;
     } catch (err) {

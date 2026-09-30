@@ -2,11 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 
-// Open tabs are a per-browser, per-user list of job ids (plus at most one "new job" tab), kept in
-// localStorage so they survive reloads and stay in sync across browser windows via the storage event.
-// The URL (/ or /j/[id]) says which tab is active; the store only knows which tabs are open.
+// Open tabs are a per-browser, per-user list of job ids, kept in localStorage so they survive reloads
+// and stay in sync across browser windows via the storage event. The Home tab (/) is always there,
+// always first, and never stored. The URL (/ or /j/[id]) says which tab is active; the store only knows
+// which job tabs are open.
 
-export const NEW_TAB = "new";
+export const HOME_TAB = "home";
+// Older builds stored a "new job" tab under this id; drop it on read.
+const LEGACY_NEW_TAB = "new";
 
 export type TabsState = { ids: string[]; draftUrl: string };
 
@@ -31,7 +34,9 @@ function read(key: string): TabsState {
     try {
       const parsed = JSON.parse(raw) as Partial<TabsState>;
       state = {
-        ids: Array.isArray(parsed.ids) ? [...new Set(parsed.ids.filter((x) => typeof x === "string"))] : [],
+        ids: Array.isArray(parsed.ids)
+          ? [...new Set(parsed.ids.filter((x) => typeof x === "string" && x !== LEGACY_NEW_TAB && x !== HOME_TAB))]
+          : [],
         draftUrl: typeof parsed.draftUrl === "string" ? parsed.draftUrl : "",
       };
     } catch {
@@ -80,30 +85,27 @@ export function useTabs() {
     () => ({
       // Add a tab at the end if it isn't open already.
       open: (id: string) => {
+        if (id === HOME_TAB) return;
         recentlyClosed.delete(id);
         update((s) => (s.ids.includes(id) ? s : { ...s, ids: [...s.ids, id] }));
       },
       // Same, but skipped for a tab that was closed a moment ago (used by the route → tab sync).
       ensure: (id: string) => {
+        if (id === HOME_TAB) return;
         const closedAt = recentlyClosed.get(id);
         if (closedAt && Date.now() - closedAt < RECENTLY_CLOSED_MS) return;
         update((s) => (s.ids.includes(id) ? s : { ...s, ids: [...s.ids, id] }));
       },
-      // Swap one tab for another in place (the "new job" tab becomes the job it started).
-      replace: (from: string, to: string) =>
-        update((s) => {
-          recentlyClosed.set(from, Date.now());
-          const ids = s.ids.filter((x) => x !== to);
-          const i = ids.indexOf(from);
-          if (i === -1) return { ...s, ids: [...ids, to] };
-          ids[i] = to;
-          return { ...s, ids, draftUrl: from === NEW_TAB ? "" : s.draftUrl };
-        }),
+      // A job started from Home: open its tab at the end and clear the URL box. Home stays put.
+      start: (id: string) => {
+        recentlyClosed.delete(id);
+        update((s) => ({ ...s, ids: s.ids.includes(id) ? s.ids : [...s.ids, id], draftUrl: "" }));
+      },
       close: (id: string) => {
         recentlyClosed.set(id, Date.now());
-        update((s) => ({ ...s, ids: s.ids.filter((x) => x !== id), draftUrl: id === NEW_TAB ? "" : s.draftUrl }));
+        update((s) => ({ ...s, ids: s.ids.filter((x) => x !== id) }));
       },
-      // What's typed into the "new job" URL box, so switching tabs doesn't lose it.
+      // What's typed into the Home URL box, so switching tabs doesn't lose it.
       setDraftUrl: (draftUrl: string) => update((s) => (s.draftUrl === draftUrl ? s : { ...s, draftUrl })),
     }),
     [update],
@@ -114,12 +116,12 @@ export function useTabs() {
 
 // Which tab a pathname corresponds to.
 export function tabIdForPath(pathname: string): string | null {
-  if (pathname === "/") return NEW_TAB;
+  if (pathname === "/") return HOME_TAB;
   const m = pathname.match(/^\/j\/([^/]+)$/);
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-export const hrefForTab = (id: string) => (id === NEW_TAB ? "/" : `/j/${id}`);
+export const hrefForTab = (id: string) => (id === HOME_TAB ? "/" : `/j/${id}`);
 
 // Unsaved-edit guard. A workspace with a draft registers here; the tab bar asks before switching away,
 // and the browser asks before unloading.

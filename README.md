@@ -30,7 +30,7 @@ Example data: a fictional candidate, three fictional postings.
 
 | Cover letter from the tailored resume | Several jobs at once, each a tab |
 | --- | --- |
-| ![Cover letter with a prompt and generated text](docs/screenshots/cover-letter.png) | ![New job tab with recent jobs and scores](docs/screenshots/new-job.png) |
+| ![Cover letter with a prompt and generated text](docs/screenshots/cover-letter.png) | ![Home tab with recent jobs and scores](docs/screenshots/new-job.png) |
 
 <p align="center">
   <img src="docs/screenshots/progress.png" alt="The pipeline running in the background: extract, score, tailor, rescore" width="100%">

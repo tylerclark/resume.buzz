@@ -9,7 +9,7 @@ import { THEMES, useTheme, type Theme } from "./theme";
 import { JOB_STAGES, stageInFlight } from "@/lib/types";
 import { isBusy, shownScore, useJobStatuses, type JobStatus } from "./job-status";
 import { Logo } from "./logo";
-import { confirmLeave, hrefForTab, NEW_TAB, tabIdForPath, useTabs } from "./tabs-store";
+import { confirmLeave, hrefForTab, HOME_TAB, tabIdForPath, useTabs } from "./tabs-store";
 
 function initials(s: string) {
   const parts = s
@@ -46,7 +46,7 @@ function TabBar() {
   const router = useRouter();
   const tabs = useTabs();
   const active = tabIdForPath(pathname);
-  const jobIds = tabs.ids.filter((id) => id !== NEW_TAB);
+  const jobIds = tabs.ids;
   const statuses = useJobStatuses(jobIds);
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -85,42 +85,42 @@ function TabBar() {
     router.push(next ? hrefForTab(next) : "/");
   }
 
-  function openNew() {
-    if (active !== NEW_TAB && !confirmLeave()) return;
-    if (!tabs.ids.includes(NEW_TAB)) tabs.open(NEW_TAB);
-    // Coming from a job page, the URL input mounts with autoFocus; already on it, nothing remounts.
-    if (active === NEW_TAB) document.getElementById("job-url")?.focus();
-    router.push("/");
-  }
-
   return (
-    <div className="flex items-center gap-1 flex-1 min-w-0 h-full">
+    <div role="tablist" aria-label="Open jobs" className="flex items-center gap-1 flex-1 min-w-0 h-full py-2">
+      <HomeTab active={active === HOME_TAB} />
       <div
         ref={stripRef}
-        role="tablist"
-        aria-label="Open jobs"
-        className="flex items-center gap-1 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-2 h-full"
+        className="flex items-center gap-1 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden h-full"
       >
         {tabs.ids.map((id) => (
-          <TabChip
-            key={id}
-            id={id}
-            status={id === NEW_TAB ? undefined : statuses[id]}
-            active={id === active}
-            onClose={() => close(id)}
-          />
+          <TabChip key={id} id={id} status={statuses[id]} active={id === active} onClose={() => close(id)} />
         ))}
       </div>
-      <button
-        type="button"
-        onClick={openNew}
-        title="New job"
-        aria-label="New job"
-        className="flex-none w-8 h-8 grid place-items-center rounded-lg border-0 bg-transparent text-subtle cursor-pointer hover:bg-canvas hover:text-ink"
-      >
-        <PlusIcon className="w-4 h-4" />
-      </button>
     </div>
+  );
+}
+
+// Always first, never closes. Where new jobs start.
+function HomeTab({ active }: { active: boolean }) {
+  return (
+    <Link
+      role="tab"
+      aria-selected={active}
+      aria-current={active ? "page" : undefined}
+      href="/"
+      title="Home"
+      onClick={(e) => {
+        if (!active && !confirmLeave()) e.preventDefault();
+      }}
+      className={`flex items-center gap-2 h-9 px-3 rounded-[9px] border flex-none text-inherit hover:no-underline transition-colors ${
+        active
+          ? "bg-canvas border-line-2 text-ink hover:text-ink"
+          : "bg-surface border-transparent text-subtle hover:bg-canvas hover:text-ink"
+      }`}
+    >
+      <HomeIcon className="w-4 h-4" />
+      <span className="text-[12.5px] font-semibold">Home</span>
+    </Link>
   );
 }
 
@@ -135,19 +135,12 @@ function TabChip({
   active: boolean;
   onClose: () => void;
 }) {
-  const isNew = id === NEW_TAB;
   const busy = isBusy(status);
-  const failed = !isNew && status?.stage === "failed";
-  const label = isNew
-    ? "New job"
-    : status
-      ? status.title || hostOf(status.url) || (busy ? "Loading…" : "Pasted posting")
-      : "Loading…";
-  const detail = isNew
+  const failed = status?.stage === "failed";
+  const label = status ? status.title || hostOf(status.url) || (busy ? "Loading…" : "Pasted posting") : "Loading…";
+  const detail = !status
     ? ""
-    : !status
-      ? ""
-      : stageInFlight(status.stage)
+    : stageInFlight(status.stage)
         ? JOB_STAGES[status.stage].label + "…"
         : status.coverStage === "writing"
           ? "Writing cover letter…"
@@ -180,7 +173,7 @@ function TabChip({
         }}
         className="flex items-center gap-2 min-w-0 flex-1 text-inherit hover:no-underline hover:text-inherit"
       >
-        <TabIcon isNew={isNew} busy={busy} failed={failed} status={status} />
+        <TabIcon busy={busy} failed={failed} status={status} />
         <span className="min-w-0 flex flex-col leading-tight">
           <span className="text-[12.5px] font-semibold truncate">{label}</span>
           {detail && (
@@ -190,7 +183,7 @@ function TabChip({
           )}
         </span>
       </Link>
-      {!isNew && status && !busy && !failed && (
+      {status && !busy && !failed && (
         <span className="flex-none text-[10.5px] font-bold text-ok-ink bg-ok-bg px-1.5 py-px rounded-full leading-4">
           {shownScore(status)}%
         </span>
@@ -212,23 +205,7 @@ function TabChip({
   );
 }
 
-function TabIcon({
-  isNew,
-  busy,
-  failed,
-  status,
-}: {
-  isNew: boolean;
-  busy: boolean;
-  failed: boolean;
-  status: JobStatus | undefined;
-}) {
-  if (isNew)
-    return (
-      <span className="flex-none w-[18px] h-[18px] rounded-[5px] border border-dashed border-line-3 grid place-items-center text-faint">
-        <PlusIcon className="w-2.5 h-2.5" />
-      </span>
-    );
+function TabIcon({ busy, failed, status }: { busy: boolean; failed: boolean; status: JobStatus | undefined }) {
   if (busy) return <Spinner />;
   if (failed)
     return (
@@ -243,10 +220,20 @@ function TabIcon({
   );
 }
 
-function PlusIcon({ className = "" }: { className?: string }) {
+function HomeIcon({ className = "" }: { className?: string }) {
   return (
-    <svg aria-hidden viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`block ${className}`}>
-      <path d="M8 3v10M3 8h10" />
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`block ${className}`}
+    >
+      <path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5z" />
+      <path d="M6.5 13.5V9.5h3v4" />
     </svg>
   );
 }
