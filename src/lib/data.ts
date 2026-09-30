@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { baseResume, job, type Job } from "@/db/schema";
 import { auth } from "./auth";
@@ -107,6 +107,33 @@ export async function listJobs(userId: string, limit = 12) {
     )
     .limit(limit);
   return rows.map(settleStale);
+}
+
+// The Recent list: same ordering as listJobs, optionally filtered by a substring of the title, company
+// or URL, one page at a time.
+export async function searchJobs(userId: string, opts: { q?: string; offset?: number; limit?: number } = {}) {
+  const q = (opts.q ?? "").trim();
+  const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const pattern = q ? `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+  const rows = await db
+    .select(summaryColumns)
+    .from(job)
+    .where(
+      and(
+        eq(job.userId, userId),
+        pattern ? or(ilike(job.title, pattern), ilike(job.company, pattern), ilike(job.url, pattern)) : undefined,
+      ),
+    )
+    .orderBy(
+      sql`(${job.source} <> 'app' and ${job.seenAt} is null) desc`,
+      sql`${job.status} in ('rejected', 'withdrawn')`,
+      desc(job.createdAt),
+    )
+    .offset(offset)
+    .limit(limit + 1);
+  const page = rows.slice(0, limit).map(settleStale);
+  return { jobs: page, nextOffset: rows.length > limit ? offset + limit : null };
 }
 
 export async function listJobsByIds(userId: string, ids: string[]) {

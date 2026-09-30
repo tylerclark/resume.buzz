@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Job } from "@/db/schema";
@@ -11,7 +10,6 @@ import {
   hasUserEdits,
   isBackground,
   JOB_STAGES,
-  JOB_STATUSES,
   PIPELINE_STEPS,
   resumeHash,
   stageInFlight,
@@ -22,12 +20,14 @@ import {
   type StoredTailored,
 } from "@/lib/types";
 import { hostOf, Spinner } from "./app-header";
+import { BackgroundBadge, JobRow, when } from "./job-row";
+import { RecentJobs } from "./recent-jobs";
 import { AutoTextarea } from "./auto-textarea";
 import { BaseResumeDrawer } from "./base-resume-drawer";
-import { shownScore, toStatus, useJobStatus, useJobStatusActions } from "./job-status";
-import { StatusPicker, StatusPill } from "./status-picker";
+import { toStatus, useJobStatus, useJobStatusActions } from "./job-status";
+import { StatusPicker } from "./status-picker";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
-import { confirmLeave, useLeaveGuard, useTabs } from "./tabs-store";
+import { useLeaveGuard, useTabs } from "./tabs-store";
 import { TailoredEditor } from "./tailored-editor";
 
 const COVER_CHIPS = [
@@ -37,7 +37,6 @@ const COVER_CHIPS = [
   "Mention I'm open to relocating",
 ];
 
-const TINTS = ["var(--color-avatar)", "var(--color-brand)", "var(--color-ok)"];
 
 // Shared by the left (job) and right (resume) toolbars so they line up.
 const toolbar = "flex items-center min-h-[61px] box-border px-5 py-2.5 bg-surface border-b border-line flex-none";
@@ -47,13 +46,6 @@ const btnPrimary =
   "bg-brand hover:bg-brand-hover text-white border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer disabled:opacity-60";
 const btnDark =
   "bg-ink hover:bg-ink-hover text-on-ink border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer whitespace-nowrap";
-
-function when(d: Date) {
-  const days = Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
-  if (days < 1) return "Today";
-  if (days < 2) return "Yesterday";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 export function Workspace({
   user,
@@ -501,16 +493,7 @@ export function Workspace({
                 </div>
               </form>
 
-              {history.length > 0 && (
-                <section className="flex flex-col gap-2">
-                  <h3 className="m-0 eyebrow">Recent</h3>
-                  <div className="bg-surface border border-line-2 rounded-[14px] p-1.5 flex flex-col">
-                    {history.map((h, i) => (
-                      <JobRow key={h.id} h={h} i={i} />
-                    ))}
-                  </div>
-                </section>
-              )}
+              {history.length > 0 && <RecentJobs initial={history} />}
             </>
           )}
 
@@ -1026,16 +1009,6 @@ function ProgressCard({
   );
 }
 
-function BackgroundBadge() {
-  return (
-    <span
-      title="Submitted through the API and prepared in the background. Open it to review."
-      className="flex-none text-[10.5px] font-bold uppercase tracking-[.04em] text-brand bg-brand-tint border border-brand-line px-1.5 py-px rounded-full leading-4"
-    >
-      Background
-    </span>
-  );
-}
 
 // Shown on a job that came in through the API until it's triaged: where it came from, the client's
 // notes, and the two usual outcomes.
@@ -1074,80 +1047,6 @@ function BackgroundCard({
           Mark applied
         </button>
       </div>
-    </div>
-  );
-}
-
-function JobRow({
-  h,
-  i,
-  current,
-  onNavigate,
-  readOnly,
-}: {
-  h: JobSummary;
-  i: number;
-  current?: boolean;
-  onNavigate?: () => void;
-  readOnly?: boolean;
-}) {
-  const applied = h.appliedAt
-    ? ` · Applied ${new Date(h.appliedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-    : "";
-  // Live view of jobs still being tailored (the server-rendered summary is a snapshot).
-  const live = useJobStatus(stageInFlight(h.stage) ? h.id : null) ?? h;
-  const working = stageInFlight(live.stage);
-  const failed = live.stage === "failed";
-  const title = live.title || h.title || hostOf(h.url) || "Pasted posting";
-  return (
-    <div
-      className={`flex items-center gap-2.5 p-2 rounded-[10px] ${current ? "bg-brand-tint" : "hover:bg-canvas"} ${
-        JOB_STATUSES[h.status].closed ? "opacity-60 hover:opacity-100" : ""
-      }`}
-    >
-      <Link
-        href={`/j/${h.id}`}
-        onClick={(e) => {
-          if (!current && !confirmLeave()) return e.preventDefault();
-          onNavigate?.();
-        }}
-        aria-current={current ? "page" : undefined}
-        className="flex-1 min-w-0 flex items-center gap-2.5 text-inherit hover:no-underline hover:text-inherit"
-      >
-        {working ? (
-          <div className="w-[32px] h-[32px] flex-none grid place-items-center">
-            <Spinner />
-          </div>
-        ) : (
-          <div
-            className="w-[32px] h-[32px] flex-none rounded-[9px] text-white grid place-items-center font-extrabold text-[12.5px]"
-            style={{ background: failed ? "var(--color-bad)" : TINTS[i % TINTS.length] }}
-          >
-            {failed ? "!" : (live.company || title)[0]?.toUpperCase()}
-          </div>
-        )}
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="font-semibold text-[13px] truncate text-ink">{title}</div>
-            {isBackground(h) && <BackgroundBadge />}
-          </div>
-          <div className={`text-[11.5px] truncate ${working ? "text-brand" : failed ? "text-bad" : "text-subtle"}`}>
-            {working
-              ? `${JOB_STAGES[live.stage].label}…`
-              : failed
-                ? "Failed · click to retry"
-                : `${live.company} · ${when(h.createdAt)}${applied}`}
-          </div>
-        </div>
-      </Link>
-      {!working &&
-        !failed &&
-        (readOnly ? <StatusPill status={h.status} /> : <StatusPicker key={h.status} jobId={h.id} status={h.status} />)}
-      {!working && !failed && (
-        <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
-          {shownScore(live)}%
-        </div>
-      )}
     </div>
   );
 }

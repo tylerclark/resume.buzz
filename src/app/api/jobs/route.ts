@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { userFromToken } from "@/lib/api-tokens";
-import { countRecentApiJobs, findJobIdByUrl, getBaseResume, listJobsByIds, userFromRequest } from "@/lib/data";
+import { countRecentApiJobs, findJobIdByUrl, getBaseResume, listJobsByIds, searchJobs, userFromRequest } from "@/lib/data";
 import { startJob } from "@/lib/pipeline";
 import {
   canonicalJobUrl,
@@ -19,13 +19,24 @@ async function caller(request: Request) {
 }
 
 // Lightweight status for a set of jobs (tab bar + progress polling, and API clients): ?ids=a,b,c
+// Without ids: a page of the user's jobs, newest first, optionally filtered: ?q=acme&offset=25&limit=25
 export async function GET(request: Request) {
   const user = await caller(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const params = new URL(request.url).searchParams;
+  if (!params.has("ids")) {
+    const page = await searchJobs(user.id, {
+      q: params.get("q") ?? "",
+      offset: Number(params.get("offset")) || 0,
+      limit: Number(params.get("limit")) || 25,
+    });
+    return Response.json(page, { headers: { "Cache-Control": "no-store" } });
+  }
+
   const ids = [
     ...new Set(
-      (new URL(request.url).searchParams.get("ids") ?? "")
+      (params.get("ids") ?? "")
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),

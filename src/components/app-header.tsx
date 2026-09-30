@@ -85,20 +85,6 @@ function TabBar() {
     router.push(next ? hrefForTab(next) : "/");
   }
 
-  // Same as the workspace's discard: removing a job that's still working also cancels it.
-  async function deleteJob(id: string) {
-    const msg = isBusy(statuses[id]) ? "Stop tailoring this job and remove it?" : "Remove this job?";
-    if (!confirm(msg)) return;
-    const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
-    if (!res.ok && res.status !== 404) {
-      alert("Couldn't remove it. Try again.");
-      return;
-    }
-    tabs.close(id);
-    if (id === active) router.replace("/");
-    router.refresh();
-  }
-
   return (
     <div role="tablist" aria-label="Open jobs" className="flex items-center gap-1 flex-1 min-w-0 h-full py-2">
       <HomeTab active={active === HOME_TAB} />
@@ -107,14 +93,7 @@ function TabBar() {
         className="flex items-center gap-1 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden h-full"
       >
         {tabs.ids.map((id) => (
-          <TabChip
-            key={id}
-            id={id}
-            status={statuses[id]}
-            active={id === active}
-            onClose={() => close(id)}
-            onDelete={() => deleteJob(id)}
-          />
+          <TabChip key={id} id={id} status={statuses[id]} active={id === active} onClose={() => close(id)} />
         ))}
       </div>
     </div>
@@ -150,27 +129,12 @@ function TabChip({
   status,
   active,
   onClose,
-  onDelete,
 }: {
   id: string;
   status: JobStatus | undefined;
   active: boolean;
   onClose: () => void;
-  onDelete: () => void;
 }) {
-  // The tab strip scrolls horizontally, which clips anything absolutely positioned inside it, so the
-  // menu is fixed to the viewport at the button's position.
-  const [menuAt, setMenuAt] = useState<{ top: number; right: number } | null>(null);
-  const menuOpen = menuAt !== null;
-  const closeMenu = () => setMenuAt(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuAt(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
   const busy = isBusy(status);
   const failed = status?.stage === "failed";
   const label = status ? status.title || hostOf(status.url) || (busy ? "Loading…" : "Pasted posting") : "Loading…";
@@ -229,50 +193,14 @@ function TabChip({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (menuAt) return setMenuAt(null);
-          const r = e.currentTarget.getBoundingClientRect();
-          setMenuAt({ top: r.bottom + 6, right: window.innerWidth - r.right });
+          onClose();
         }}
-        title="Tab options"
-        aria-label={`Options for ${label}`}
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
+        title={busy ? "Close tab (keeps working in the background)" : "Close tab"}
+        aria-label={`Close ${label}`}
         className="flex-none w-5 h-5 grid place-items-center rounded-md border-0 bg-transparent text-faint cursor-pointer hover:bg-line-2 hover:text-ink"
       >
-        <DotsIcon className="w-3.5 h-3.5" />
+        <CloseIcon className="w-3 h-3" />
       </button>
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => closeMenu()} />
-          <div
-            role="menu"
-            style={{ top: menuAt.top, right: menuAt.right }}
-            className="fixed z-20 bg-surface border border-line-2 rounded-[10px] shadow-menu p-1.5 min-w-[180px]"
-          >
-            <button
-              role="menuitem"
-              onClick={() => {
-                closeMenu();
-                onClose();
-              }}
-              className="w-full text-left bg-transparent hover:bg-canvas border-0 rounded-md px-2.5 py-2 text-[13px] font-semibold text-ink cursor-pointer"
-            >
-              Close tab
-              {busy && <span className="block text-[11px] font-normal text-faint">Keeps working in the background</span>}
-            </button>
-            <button
-              role="menuitem"
-              onClick={() => {
-                closeMenu();
-                onDelete();
-              }}
-              className="w-full text-left bg-transparent hover:bg-bad-bg border-0 rounded-md px-2.5 py-2 text-[13px] font-semibold text-bad cursor-pointer"
-            >
-              {busy ? "Stop and delete job" : "Delete job"}
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -310,12 +238,10 @@ function HomeIcon({ className = "" }: { className?: string }) {
   );
 }
 
-function DotsIcon({ className = "" }: { className?: string }) {
+function CloseIcon({ className = "" }: { className?: string }) {
   return (
-    <svg aria-hidden viewBox="0 0 16 16" fill="currentColor" className={`block ${className}`}>
-      <circle cx="3" cy="8" r="1.5" />
-      <circle cx="8" cy="8" r="1.5" />
-      <circle cx="13" cy="8" r="1.5" />
+    <svg aria-hidden viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`block ${className}`}>
+      <path d="M4 4l8 8M12 4l-8 8" />
     </svg>
   );
 }
