@@ -243,7 +243,7 @@ function ChatPanel({
         className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3"
       >
         {messages.length === 0 && (
-          <div className="flex flex-col gap-2 my-auto">
+          <div className="flex flex-col gap-2 mt-auto">
             <p className="m-0 text-[13px] text-subtle leading-[1.5]">
               {hasJob
                 ? "Ask anything about this posting, your scores, the tailored resume or the cover letter."
