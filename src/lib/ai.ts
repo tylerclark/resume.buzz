@@ -160,3 +160,112 @@ export function parseResumeFile(file: { name: string; type: string; data: Buffer
     "low",
   );
 }
+
+// ---------- Chat ----------
+
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+export type ChatContext = {
+  base: Resume | null;
+  facts: Fact[];
+  job: {
+    title: string;
+    company: string;
+    location: string;
+    pay: string;
+    employmentType: string;
+    level: string;
+    url: string;
+    status: string;
+    notes: string;
+    raw: string;
+    prompt: string;
+    score: number;
+    scoreNote: string;
+    requirements: { status: string; text: string }[];
+    tailoredScore: number | null;
+    tailoredScoreNote: string | null;
+    tailoredRequirements: { status: string; text: string }[] | null;
+    keywordsHit: string[];
+    keywordsMissing: string[];
+    tailored: StoredTailored | null;
+    coverLetter: string[] | null;
+  } | null;
+};
+
+const reqList = (rs: { status: string; text: string }[]) => rs.map((r) => `- [${r.status}] ${r.text}`).join("\n");
+
+function chatSystem(ctx: ChatContext) {
+  const parts: string[] = [
+    `You are the resume.buzz assistant: a blunt, practical coach helping a candidate land one specific job. You can see everything resume.buzz knows about them and the posting (below). Answer questions about the fit, the scores, the tailored resume, the cover letter, interview prep, or anything else in that context.
+
+How the scores work: the "base score" (0–100) is how well the candidate's base resume plus their confirmed facts fits the posting; the "tailored score" is the same measure for the tailored resume. Both come from the requirement checklist: "hit" = clearly demonstrated, "partial" = adjacent evidence, "miss" = absent. The way to drive the score up is to turn partials and misses into hits honestly: surface real experience the resume leaves out (the candidate can add these as confirmed facts, which are then worked into tailoring), reword bullets to use the posting's language, and re-run tailoring. Never suggest inventing experience.
+
+Style: plain text, no markdown headers or tables. Short paragraphs; "-" bullets when listing. Be specific: quote the requirement or bullet you mean. Keep answers tight unless asked to go deep. When you suggest a resume change, give the exact wording. When something isn't in the context (e.g. no job open), say so instead of guessing.`,
+  ];
+  if (ctx.base) parts.push(`<base_resume>\n${resumeJson(ctx.base)}\n</base_resume>`);
+  else parts.push("The candidate has not added a base resume yet.");
+  if (ctx.facts.length) parts.push(factsBlock(ctx.facts).trim());
+  const j = ctx.job;
+  if (!j) {
+    parts.push("No job is open right now (the candidate is on the Home tab). You can still talk about the base resume in general.");
+    return parts.join("\n\n");
+  }
+  const meta = [
+    `Title: ${j.title || "(unknown)"}`,
+    `Company: ${j.company || "(unknown)"}`,
+    j.location && `Location: ${j.location}`,
+    j.pay && `Pay: ${j.pay}`,
+    j.employmentType && `Type: ${j.employmentType}`,
+    j.level && `Level: ${j.level}`,
+    j.url && `URL: ${j.url}`,
+    `Application status: ${j.status}`,
+    j.notes && `Notes attached to this job: ${j.notes}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  parts.push(`<job>\n${meta}\n</job>`);
+  parts.push(`<posting>\n${j.raw}\n</posting>`);
+  parts.push(
+    `<base_score>\nScore: ${j.score}/100\n${j.scoreNote}\nRequirements against the base resume:\n${reqList(j.requirements)}\n</base_score>`,
+  );
+  if (j.tailoredScore !== null)
+    parts.push(
+      `<tailored_score>\nScore: ${j.tailoredScore}/100\n${j.tailoredScoreNote ?? ""}\nRequirements against the tailored resume:\n${reqList(j.tailoredRequirements ?? [])}\nKeywords hit: ${j.keywordsHit.join(", ") || "(none)"}\nKeywords missing: ${j.keywordsMissing.join(", ") || "(none)"}\n</tailored_score>`,
+    );
+  parts.push(`<tailoring_instructions>\n${j.prompt}\n</tailoring_instructions>`);
+  if (j.tailored)
+    parts.push(
+      `<tailored_resume note="the resume as it will be sent, including the candidate's own edits">\n${JSON.stringify(finalResume(j.tailored), null, 2)}\n</tailored_resume>`,
+    );
+  else parts.push("The resume has not been tailored for this job yet (or tailoring is still running).");
+  if (j.coverLetter) parts.push(`<cover_letter>\n${j.coverLetter.join("\n\n")}\n</cover_letter>`);
+  return parts.join("\n\n");
+}
+
+// Streams the assistant's reply as plain text chunks.
+export function chatStream(ctx: ChatContext, messages: ChatMessage[], signal?: AbortSignal) {
+  const stream = anthropic.messages.stream(
+    {
+      model: MODEL,
+      max_tokens: 4000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium" },
+      system: chatSystem(ctx),
+      messages,
+    },
+    { signal },
+  );
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const enc = new TextEncoder();
+      stream.on("text", (t) => controller.enqueue(enc.encode(t)));
+      stream.on("error", (e) => controller.error(e));
+      stream.on("abort", () => controller.close());
+      stream.on("finalMessage", () => controller.close());
+    },
+    cancel() {
+      stream.abort();
+    },
+  });
+}

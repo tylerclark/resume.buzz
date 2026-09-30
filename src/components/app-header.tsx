@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { ApiTokensDialog } from "./api-tokens-dialog";
+import { ChatButton } from "./chat-panel";
 import { THEMES, useTheme, type Theme } from "./theme";
 import { JOB_STAGES, stageInFlight } from "@/lib/types";
 import { isBusy, shownScore, useJobStatuses, type JobStatus } from "./job-status";
@@ -34,7 +35,8 @@ export function AppHeader({ user }: { user: { name: string; email: string } }) {
         <Logo height={26} priority />
       </Link>
       <TabBar />
-      <div className="ml-auto flex-none">
+      <div className="ml-auto flex-none flex items-center gap-2">
+        <ChatButton />
         <UserMenu user={user} />
       </div>
     </header>
