@@ -5,6 +5,7 @@ import { baseResume, job, type Job } from "@/db/schema";
 import { auth } from "./auth";
 import {
   canonicalJobUrl,
+  DEFAULT_COVER_STARTERS,
   DEFAULT_SORT,
   type Fact,
   type JobSort,
@@ -37,6 +38,23 @@ export async function setFacts(userId: string, facts: Fact[]) {
     .where(eq(baseResume.userId, userId))
     .returning({ facts: baseResume.facts });
   return row?.facts ?? null;
+}
+
+export async function getCoverStarters(userId: string): Promise<string[]> {
+  const [row] = await db
+    .select({ coverStarters: baseResume.coverStarters })
+    .from(baseResume)
+    .where(eq(baseResume.userId, userId));
+  return row?.coverStarters ?? DEFAULT_COVER_STARTERS;
+}
+
+export async function setCoverStarters(userId: string, coverStarters: string[]) {
+  const [row] = await db
+    .update(baseResume)
+    .set({ coverStarters })
+    .where(eq(baseResume.userId, userId))
+    .returning({ coverStarters: baseResume.coverStarters });
+  return row?.coverStarters ?? null;
 }
 
 export async function saveBaseResume(userId: string, data: Resume) {

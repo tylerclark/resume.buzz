@@ -212,6 +212,16 @@ export const DEFAULT_PROMPT = `You are tailoring my resume for one specific job 
 - Prefer the posting's exact keywords where they honestly apply.
 - Keep it to one page. Preserve my voice; no buzzwords.`;
 
+// One-click additions to the cover letter prompt. Users can replace these with their own.
+export const DEFAULT_COVER_STARTERS = [
+  "Confident but not salesy",
+  "Under 250 words",
+  "Lead with my strongest match",
+  "Mention I'm open to relocating",
+];
+export const MAX_COVER_STARTERS = 12;
+export const MAX_COVER_STARTER_LENGTH = 1000;
+
 // Stable fingerprint of a base resume (runs on server and client). FNV-1a over the JSON.
 export function resumeHash(r: Resume): string {
   // Sorted keys: Postgres jsonb doesn't preserve key order.

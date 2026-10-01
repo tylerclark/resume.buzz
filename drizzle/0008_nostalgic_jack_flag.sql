@@ -1,0 +1,1 @@
+ALTER TABLE "base_resume" ADD COLUMN "cover_starters" jsonb;

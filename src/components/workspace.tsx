@@ -6,10 +6,13 @@ import type { Job } from "@/db/schema";
 import { alignToBase } from "@/lib/align";
 import type { JobSummary } from "@/lib/data";
 import {
+  DEFAULT_COVER_STARTERS,
   DEFAULT_PROMPT,
   hasUserEdits,
   isBackground,
   JOB_STAGES,
+  MAX_COVER_STARTER_LENGTH,
+  MAX_COVER_STARTERS,
   PIPELINE_STEPS,
   resumeHash,
   stageInFlight,
@@ -30,14 +33,6 @@ import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "
 import { useLeaveGuard, useTabs } from "./tabs-store";
 import { TailoredEditor } from "./tailored-editor";
 
-const COVER_CHIPS = [
-  "Confident but not salesy",
-  "Under 250 words",
-  "Lead with my strongest match",
-  "Mention I'm open to relocating",
-];
-
-
 // Shared by the left (job) and right (resume) toolbars so they line up.
 const toolbar = "flex items-center min-h-[61px] box-border px-5 py-2.5 bg-surface border-b border-line flex-none";
 const btnGhost =
@@ -51,6 +46,7 @@ export function Workspace({
   user,
   base,
   facts,
+  coverStarters,
   history,
   job: initialJob,
   autoUrl,
@@ -58,6 +54,7 @@ export function Workspace({
   user: { name: string; email: string };
   base: Resume | null;
   facts: Fact[];
+  coverStarters?: string[];
   history: JobSummary[];
   job: Job | null;
   autoUrl?: string;
@@ -83,7 +80,10 @@ export function Workspace({
   // pane reacts on click instead of waiting a round-trip (or two, when facts are saved first).
   const [retailorPending, setRetailorPending] = useState(false);
 
-  const [coverPrompt, setCoverPrompt] = useState(initialJob?.coverPrompt ?? "");
+  // Single-line input: fold line breaks from prompts saved before it was one.
+  const [coverPrompt, setCoverPrompt] = useState(() => (initialJob?.coverPrompt ?? "").replace(/\s*\n\s*/g, " "));
+  const [starters, setStarters] = useState(coverStarters ?? DEFAULT_COVER_STARTERS);
+  const [editingStarters, setEditingStarters] = useState(false);
   const [coverDraft, setCoverDraft] = useState<string | null>(null); // non-null = editing the letter (blank line = new paragraph)
 
   // The URL box on the Home tab lives in the tab store so switching tabs doesn't lose it.
@@ -782,34 +782,77 @@ export function Workspace({
               {coverDraft === null && (
                 <div className="w-full max-w-[720px] bg-surface border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5">
                   <div className="flex justify-between items-baseline">
-                    <div className="font-bold text-[14px]">Cover letter prompt</div>
+                    <label htmlFor="cover-prompt" className="font-bold text-[14px]">
+                      Cover letter prompt
+                    </label>
                     <span className="text-[12px] text-faint">Optional · nothing is generated until you ask</span>
                   </div>
-                  <textarea
-                    value={coverPrompt}
-                    onChange={(e) => setCoverPrompt(e.target.value)}
-                    rows={4}
-                    placeholder="Tell it how to write. Tone, length, what to lead with, anything to avoid…"
-                    className="w-full box-border border border-line-2 rounded-[10px] px-3.5 py-3 text-[13.5px] leading-[1.55] resize-y text-ink bg-field"
-                  />
-                  <div className="flex gap-1.5 flex-wrap items-center">
-                    {COVER_CHIPS.map((label) => (
-                      <button
-                        key={label}
-                        onClick={() => setCoverPrompt((p) => (p ? p.replace(/\s*$/, "") + " " : "") + label + ".")}
-                        className="bg-canvas border border-line rounded-full px-2.5 py-[5px] text-[12px] font-semibold text-muted cursor-pointer hover:border-brand hover:text-brand"
-                      >
-                        + {label}
-                      </button>
-                    ))}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      generateCover();
+                    }}
+                    className="relative"
+                  >
+                    <input
+                      id="cover-prompt"
+                      type="text"
+                      value={coverPrompt}
+                      onChange={(e) => setCoverPrompt(e.target.value)}
+                      disabled={coverBusy}
+                      placeholder="Tone, length, what to lead with, anything to avoid…"
+                      className="w-full box-border border border-line-2 rounded-[10px] text-[14px] pl-3 pr-[46px] py-[11px] bg-field text-ink disabled:opacity-60 focus:border-brand focus:outline-none"
+                    />
                     <button
-                      onClick={generateCover}
+                      type="submit"
                       disabled={coverBusy || !!busyAction}
-                      className={`${btnPrimary} ml-auto px-4 py-[9px]`}
+                      title={cover ? "Regenerate cover letter" : "Generate cover letter"}
+                      aria-label={cover ? "Regenerate cover letter" : "Generate cover letter"}
+                      className="absolute right-[6px] top-1/2 -translate-y-1/2 w-[32px] h-[32px] grid place-items-center bg-brand hover:bg-brand-hover text-white border-0 rounded-[8px] cursor-pointer disabled:opacity-40 disabled:cursor-default"
                     >
-                      {coverBusy ? "Writing…" : cover ? "Regenerate" : "Generate cover letter"}
+                      {coverBusy || busyAction === "cover" ? (
+                        <Spinner className="w-4 h-4 border-white border-t-transparent" />
+                      ) : (
+                        <ArrowIcon className="w-4 h-4" />
+                      )}
                     </button>
-                  </div>
+                  </form>
+                  {editingStarters ? (
+                    <StartersEditor
+                      initial={starters}
+                      onSaved={(saved) => {
+                        setStarters(saved);
+                        setEditingStarters(false);
+                        router.refresh(); // other job tabs
+                      }}
+                      onCancel={() => setEditingStarters(false)}
+                    />
+                  ) : (
+                    <div className="flex gap-1.5 flex-wrap items-center">
+                      {starters.map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() =>
+                            setCoverPrompt(
+                              (p) => (p ? p.replace(/\s*$/, "") + " " : "") + label + (/[.!?…]$/.test(label) ? "" : "."),
+                            )
+                          }
+                          title={label}
+                          className="max-w-full truncate bg-canvas border border-line rounded-full px-2.5 py-[5px] text-[12px] font-semibold text-muted cursor-pointer hover:border-brand hover:text-brand"
+                        >
+                          + {label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setEditingStarters(true)}
+                        className="ml-auto bg-transparent border-0 p-0 text-subtle hover:text-ink text-[12px] font-semibold cursor-pointer"
+                      >
+                        Edit starters
+                      </button>
+                    </div>
+                  )}
                   {(error || job.coverStage === "failed") && (
                     <p className="m-0 text-[12.5px] text-bad">{error ?? job.coverError ?? "Cover letter failed."}</p>
                   )}
@@ -1355,6 +1398,97 @@ function JobPanel({
         )}
       </section>
     </>
+  );
+}
+
+// Edit the one-click starter prompts under the cover letter prompt. Saved per user, so they show on every job.
+function StartersEditor({
+  initial,
+  onSaved,
+  onCancel,
+}: {
+  initial: string[];
+  onSaved: (starters: string[]) => void;
+  onCancel: () => void;
+}) {
+  const [rows, setRows] = useState(initial.length > 0 ? initial : [""]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/cover-starters", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ starters: rows }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (!res.ok) return setError(body.error ?? "Couldn't save that.");
+    onSaved(body);
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+      className="flex flex-col gap-2 border-t border-line pt-3"
+    >
+      <div className="flex justify-between items-baseline">
+        <div className="font-bold text-[13px]">Starter prompts</div>
+        <span className="text-[12px] text-faint">One click adds them to the prompt · saved for every job</span>
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} className="flex gap-1.5 items-center">
+          <input
+            type="text"
+            value={row}
+            onChange={(e) => setRows(rows.map((r, j) => (j === i ? e.target.value : r)))}
+            maxLength={MAX_COVER_STARTER_LENGTH}
+            autoFocus={i === rows.length - 1 && !row}
+            placeholder="e.g. Under 250 words, warm, lead with my strongest match"
+            aria-label={`Starter prompt ${i + 1}`}
+            className="flex-1 min-w-0 box-border border border-line-2 rounded-[9px] text-[13px] px-3 py-2 bg-field text-ink focus:border-brand focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setRows(rows.filter((_, j) => j !== i))}
+            title="Remove"
+            aria-label={`Remove starter prompt ${i + 1}`}
+            className="w-8 h-8 flex-none grid place-items-center bg-transparent border-0 rounded-[8px] text-[18px] leading-none text-subtle hover:text-bad hover:bg-canvas cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <div className="flex gap-2 items-center flex-wrap">
+        <button
+          type="button"
+          onClick={() => setRows([...rows, ""])}
+          disabled={rows.length >= MAX_COVER_STARTERS}
+          className="bg-transparent border-0 p-0 text-brand text-[12px] font-semibold cursor-pointer hover:underline disabled:opacity-60 disabled:cursor-default disabled:no-underline"
+        >
+          + Add starter
+        </button>
+        <button
+          type="button"
+          onClick={() => setRows(DEFAULT_COVER_STARTERS)}
+          className="ml-auto bg-transparent border-0 text-subtle hover:text-ink text-[12px] font-semibold cursor-pointer"
+        >
+          Reset to default
+        </button>
+        <button type="button" onClick={onCancel} className={btnGhost}>
+          Cancel
+        </button>
+        <button type="submit" disabled={saving} className={btnPrimary}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+      {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
+    </form>
   );
 }
 

@@ -73,6 +73,8 @@ export const baseResume = pgTable("base_resume", {
     .references(() => user.id, { onDelete: "cascade" }),
   data: jsonb("data").$type<Resume>().notNull(),
   facts: jsonb("facts").$type<Fact[]>().notNull().default([]),
+  // The user's own cover letter starter prompts. Null = the built-in defaults.
+  coverStarters: jsonb("cover_starters").$type<string[]>(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

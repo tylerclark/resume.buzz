@@ -57,6 +57,13 @@
       "when": 1790654318483,
       "tag": "0007_furry_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790873658843,
+      "tag": "0008_nostalgic_jack_flag",
+      "breakpoints": true
     }
   ]
 }
