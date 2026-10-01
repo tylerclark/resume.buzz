@@ -28,7 +28,7 @@ export function hostOf(url: string) {
   }
 }
 
-export function AppHeader({ user }: { user: { name: string; email: string } }) {
+export function AppHeader({ user, demo }: { user: { name: string; email: string }; demo: boolean }) {
   return (
     <header className="flex items-center gap-3 pl-5 pr-5 bg-surface border-b border-line flex-none h-[64px] min-w-0">
       <Link href="/" className="hover:no-underline flex-none">
@@ -36,8 +36,16 @@ export function AppHeader({ user }: { user: { name: string; email: string } }) {
       </Link>
       <TabBar />
       <div className="ml-auto flex-none flex items-center gap-2">
+        {demo && (
+          <span
+            title="Demo mode: showing a sample resume, not yours"
+            className="text-[10.5px] font-bold uppercase tracking-[.06em] text-warn-ink bg-warn-bg border border-warn-line px-2 py-0.5 rounded-full"
+          >
+            Demo
+          </span>
+        )}
         <ChatButton />
-        <UserMenu user={user} />
+        <UserMenu user={user} demo={demo} />
       </div>
     </header>
   );
@@ -257,10 +265,26 @@ export function Spinner({ className = "" }: { className?: string }) {
   );
 }
 
-function UserMenu({ user }: { user: { name: string; email: string } }) {
+function UserMenu({ user, demo }: { user: { name: string; email: string }; demo: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [tokensOpen, setTokensOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  // Demo mode swaps every piece of data on screen, so reload from Home rather than patching state:
+  // that also drops in-memory chat threads and job statuses from the other side.
+  async function toggleDemo() {
+    if (switching || !confirmLeave()) return;
+    setSwitching(true);
+    const res = await fetch("/api/demo", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on: !demo }),
+    }).catch(() => null);
+    if (!res?.ok) return setSwitching(false);
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full reload is the point
+    window.location.assign("/");
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -293,6 +317,24 @@ function UserMenu({ user }: { user: { name: string; email: string } }) {
             <div className="px-2.5 py-2 text-[12px] text-subtle truncate">{user.email}</div>
             <ThemePicker />
             <div className="my-1 border-t border-line" />
+            <button
+              role="menuitemcheckbox"
+              aria-checked={demo}
+              disabled={switching}
+              onClick={toggleDemo}
+              title="Swap your resume and jobs for a sample profile, so you can show the app without showing your own details"
+              className="w-full flex items-center justify-between gap-3 text-left bg-transparent hover:bg-canvas border-0 rounded-md px-2.5 py-2 text-[13px] font-semibold text-ink cursor-pointer disabled:opacity-60"
+            >
+              Demo mode
+              <span
+                aria-hidden
+                className={`flex-none w-7 h-4 rounded-full p-0.5 transition-colors ${demo ? "bg-brand" : "bg-line-2"}`}
+              >
+                <span
+                  className={`block w-3 h-3 rounded-full bg-white shadow-pill transition-transform ${demo ? "translate-x-3" : ""}`}
+                />
+              </span>
+            </button>
             <button
               role="menuitem"
               onClick={() => {

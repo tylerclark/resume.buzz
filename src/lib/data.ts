@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, gt, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { baseResume, job, type Job } from "@/db/schema";
-import { auth } from "./auth";
+import { userFromHeaders } from "./auth";
 import {
   canonicalJobUrl,
   DEFAULT_COVER_STARTERS,
@@ -16,9 +16,8 @@ import {
   stageInFlight,
 } from "./types";
 
-export async function userFromRequest(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  return session?.user ?? null;
+export function userFromRequest(request: Request) {
+  return userFromHeaders(request.headers);
 }
 
 export async function getBaseResume(userId: string): Promise<Resume | null> {

@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Resend } from "resend";
 import { db, schema } from "@/db";
+import { effectiveUser, type AppUser } from "./demo";
 
 // Private beta: comma-separated allowlist. Empty = nobody can sign in (fail closed).
 const allowed = (process.env.ALLOWED_EMAILS ?? "")
@@ -58,8 +59,15 @@ export async function getSession() {
   return auth.api.getSession({ headers: await headers() });
 }
 
+// The signed-in user the app should act as, or null. In demo mode that's the demo user, not the real one,
+// so everything looked up by its id (resume, jobs, facts) is the demo data.
+export async function userFromHeaders(headers: Headers): Promise<AppUser | null> {
+  const session = await auth.api.getSession({ headers });
+  return session ? effectiveUser(session.user, headers.get("cookie")) : null;
+}
+
 export async function requireUser() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-  return session.user;
+  const user = await userFromHeaders(await headers());
+  if (!user) redirect("/login");
+  return user;
 }

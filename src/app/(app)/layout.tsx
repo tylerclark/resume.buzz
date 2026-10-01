@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <TabsProvider userId={user.id}>
       <JobStatusProvider>
         <div className="h-screen flex flex-col overflow-hidden">
-          <AppHeader user={{ name: user.name, email: user.email }} />
+          <AppHeader user={{ name: user.name, email: user.email }} demo={user.demo} />
           {children}
         </div>
       </JobStatusProvider>

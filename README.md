@@ -55,6 +55,7 @@ Then you can:
 - **Export** a print-ready PDF named `<Name> - Resume for <Company>`.
 - **Import** your base resume from PDF or DOCX, or edit it in a structured editor that can reorder sections and entries.
 - **Run several jobs at once.** Each job is a tab. The pipeline runs on the server after the request returns, so you can switch tabs, reload, or close the browser while it works. Failed jobs retry from the step that broke.
+- **Demo it safely.** Demo mode in the account menu swaps your resume, jobs and email for a made-up profile, so you can show the app (with real postings) without showing your own details. Turn it off and everything of yours is back.
 
 There is also a shortcut: prefix any posting URL with your instance, `resume.buzz/https://jobs.example.com/123`, and tailoring starts immediately.
 
@@ -183,6 +184,7 @@ src/
     style.ts          the no-em-dash style guard
     types.ts          Zod schemas shared by API, DB and UI
     auth.ts           BetterAuth config and the allowlist
+    demo.ts           demo mode: the sample resume and the shadow user that owns it
     data.ts           DB reads used by pages and the pipeline
   db/                 Drizzle schema and client
   proxy.ts            optimistic session-cookie redirect for app routes
