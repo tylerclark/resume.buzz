@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/db";
-import { baseResume, user } from "@/db/schema";
+import { baseResume, job, user } from "@/db/schema";
+import { demoJobRows } from "./demo-jobs";
 import type { Resume } from "./types";
 
 // Demo mode lets you show the app without showing your own resume. Turning it on swaps the signed-in
@@ -26,9 +27,10 @@ export function effectiveUser(real: { id: string; name: string; email: string },
     : { id: real.id, name: real.name, email: real.email, demo: false };
 }
 
-// Creates the shadow user and its resume the first time demo mode is turned on. Edits made to the demo
-// resume afterwards are kept. The stored email is unique per account and can't sign in (example.com is
-// never on the allowlist).
+// Creates the shadow user, its resume and a few sample jobs the first time demo mode is turned on. Edits
+// made to the demo resume or the sample jobs afterwards are kept; a sample job that was deleted comes
+// back the next time demo mode is turned on. The stored email is unique per account and can't sign in
+// (example.com is never on the allowlist).
 export async function ensureDemoUser(userId: string) {
   const id = demoUserId(userId);
   await db
@@ -36,6 +38,7 @@ export async function ensureDemoUser(userId: string) {
     .values({ id, name: DEMO_USER.name, email: `demo+${userId}@example.com` })
     .onConflictDoNothing();
   await db.insert(baseResume).values({ userId: id, data: DEMO_RESUME }).onConflictDoNothing();
+  await db.insert(job).values(demoJobRows(id, DEMO_RESUME)).onConflictDoNothing();
 }
 
 // Entirely fictional: the person, the employers and the numbers.
