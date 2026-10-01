@@ -15,8 +15,8 @@ importers:
         specifier: ^0.128.0
         version: 0.128.0(zod@4.6.5)
       '@mendable/firecrawl-js':
-        specifier: ^4.41.0
-        version: 4.41.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+        specifier: ^4.42.0
+        version: 4.42.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       '@neondatabase/serverless':
         specifier: ^1.1.0
         version: 1.1.0
@@ -918,8 +918,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@mendable/firecrawl-js@4.41.0':
-    resolution: {integrity: sha512-Fx1xBDNgRVr8aKlOP7DRLsIUqS8CZiJtdHXWUWBh3s4yDbHXJQq6paN0vL8hnJcZirZdD7DqDbZBvylfsVsqDA==}
+  '@mendable/firecrawl-js@4.42.0':
+    resolution: {integrity: sha512-xHUWYSmWft/gH5hLHlUM0Duhgw5FC9+tXwOHuqzOWRzfPobahSvx/in3/SUYbscYWFrXt0mCvIg6NZIkLHHVUw==}
     engines: {node: '>=22.0.0'}
 
   '@napi-rs/wasm-runtime@1.2.4':
@@ -3801,7 +3801,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@mendable/firecrawl-js@4.41.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)':
+  '@mendable/firecrawl-js@4.42.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)':
     dependencies:
       axios: 1.18.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       firecrawl: 4.30.1(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
