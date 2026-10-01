@@ -29,6 +29,16 @@ export function BackgroundBadge() {
   );
 }
 
+// Stays on a job that came in through the API after the "Background" badge clears.
+function ImportedMark({ source }: { source: string }) {
+  const label = `Imported through the API (${source})`;
+  return (
+    <span title={label} aria-label={label} role="img" className="flex-none text-faint">
+      <ImportIcon className="w-3.5 h-3.5" />
+    </span>
+  );
+}
+
 export function JobRow({
   h,
   i,
@@ -92,7 +102,7 @@ export function JobRow({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
             <div className="font-semibold text-[13px] truncate text-ink">{title}</div>
-            {isBackground(h) && <BackgroundBadge />}
+            {isBackground(h) ? <BackgroundBadge /> : h.source !== "app" && <ImportedMark source={h.source} />}
           </div>
           <div className={`text-[11.5px] truncate ${working ? "text-brand" : failed ? "text-bad" : "text-subtle"}`}>
             {working
@@ -160,3 +170,19 @@ function DotsIcon({ className = "" }: { className?: string }) {
   );
 }
 
+function ImportIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`block ${className}`}
+    >
+      <path d="M8 2v7.5M5 6.5l3 3 3-3M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2" />
+    </svg>
+  );
+}
