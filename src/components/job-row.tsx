@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { JobSummary } from "@/lib/data";
-import { isBackground, JOB_STAGES, JOB_STATUSES, stageInFlight } from "@/lib/types";
+import { JOB_STAGES, JOB_STATUSES, stageInFlight } from "@/lib/types";
 import { hostOf, Spinner } from "./app-header";
 import { shownScore, useJobStatus } from "./job-status";
 import { StatusPicker, StatusPill } from "./status-picker";
@@ -18,23 +18,14 @@ export function when(d: Date) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function BackgroundBadge() {
+// Marks a job that came in through the API. It stays for good, so imported jobs are easy to spot.
+export function ApiBadge() {
   return (
     <span
-      title="Submitted through the API and prepared in the background. Open it to review."
+      title="Submitted through the API and prepared in the background."
       className="flex-none text-[10.5px] font-bold uppercase tracking-[.04em] text-brand bg-brand-tint border border-brand-line px-1.5 py-px rounded-full leading-4"
     >
-      Background
-    </span>
-  );
-}
-
-// Stays on a job that came in through the API after the "Background" badge clears.
-function ImportedMark({ source }: { source: string }) {
-  const label = `Imported through the API (${source})`;
-  return (
-    <span title={label} aria-label={label} role="img" className="flex-none text-faint">
-      <ImportIcon className="w-3.5 h-3.5" />
+      API
     </span>
   );
 }
@@ -102,7 +93,7 @@ export function JobRow({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
             <div className="font-semibold text-[13px] truncate text-ink">{title}</div>
-            {isBackground(h) ? <BackgroundBadge /> : h.source !== "app" && <ImportedMark source={h.source} />}
+            {h.source !== "app" && <ApiBadge />}
           </div>
           <div className={`text-[11.5px] truncate ${working ? "text-brand" : failed ? "text-bad" : "text-subtle"}`}>
             {working
@@ -166,23 +157,6 @@ function DotsIcon({ className = "" }: { className?: string }) {
       <circle cx="3" cy="8" r="1.5" />
       <circle cx="8" cy="8" r="1.5" />
       <circle cx="13" cy="8" r="1.5" />
-    </svg>
-  );
-}
-
-function ImportIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`block ${className}`}
-    >
-      <path d="M8 2v7.5M5 6.5l3 3 3-3M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2" />
     </svg>
   );
 }

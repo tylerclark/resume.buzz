@@ -89,7 +89,7 @@ const JobInput = z
   });
 
 // Submit one job ({…}), or several ([…] or { jobs: […] }). Each is tailored in the background and shows
-// up in the app with a "Background" badge. Re-submitting a URL you already have returns the existing job.
+// up in the app with an "API" badge. Re-submitting a URL you already have returns the existing job.
 export async function POST(request: Request) {
   const user = await caller(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });

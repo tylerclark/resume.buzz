@@ -125,7 +125,7 @@ export const job = pgTable(
     source: text("source").notNull().default("app"),
     // Free-form context an API client attached (why it's a fit, comp, priority…). Shown on the job.
     notes: text("notes").notNull().default(""),
-    // When the user first opened (or triaged) a job that arrived through the API. Null = still "Background".
+    // When the user first opened (or triaged) a job that arrived through the API. Null = not looked at yet.
     seenAt: timestamp("seen_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

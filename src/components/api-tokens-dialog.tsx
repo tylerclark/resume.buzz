@@ -84,8 +84,8 @@ export function ApiTokensDialog({ onClose }: { onClose: () => void }) {
           <div className="min-w-0 flex-1">
             <div className="font-extrabold text-[16px] tracking-[-.01em]">API tokens</div>
             <div className="text-[12.5px] text-subtle mt-0.5">
-              Let a script or agent submit jobs. They&apos;re tailored in the background and show up here with a
-              Background badge.
+              Let a script or agent submit jobs. They&apos;re tailored in the background and show up here with an
+              API badge.
             </div>
           </div>
           <button

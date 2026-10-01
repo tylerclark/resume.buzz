@@ -23,7 +23,7 @@ import {
   type StoredTailored,
 } from "@/lib/types";
 import { hostOf, Spinner } from "./app-header";
-import { BackgroundBadge, JobRow, when } from "./job-row";
+import { ApiBadge, JobRow, when } from "./job-row";
 import { RecentJobs } from "./recent-jobs";
 import { AutoTextarea } from "./auto-textarea";
 import { BaseResumeDrawer } from "./base-resume-drawer";
@@ -142,7 +142,7 @@ export function Workspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.missing]);
 
-  // Opening a job that arrived through the API is what clears its "Background" badge.
+  // Opening a job that arrived through the API marks it seen (it stops sorting first; the badge stays).
   useEffect(() => {
     if (!job || !isBackground(job)) return;
     fetch(`/api/jobs/${job.id}`, {
@@ -1088,7 +1088,7 @@ function BackgroundCard({
   return (
     <div className="bg-surface border border-brand-line rounded-[14px] px-[18px] py-4 flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <BackgroundBadge />
+        <ApiBadge />
         <span className="text-[12.5px] text-subtle truncate">
           Sent by <span className="font-semibold text-ink">{job.source}</span> · {when(job.createdAt)}
         </span>
