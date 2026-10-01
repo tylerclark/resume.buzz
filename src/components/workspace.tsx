@@ -907,7 +907,7 @@ export function Workspace({
                   </p>
                 </article>
               ) : (
-                <div className="w-full max-w-[720px] border border-dashed border-line-3 rounded-[14px] px-6 py-12 text-center text-faint text-[13.5px] leading-normal">
+                <div className="w-full max-w-[720px] border border-dashed border-line-3 rounded-[14px] px-6 py-12 text-center text-balance text-faint text-[13.5px] leading-normal">
                   Your letter will appear here. It reads the tailored resume and the posting, so generate it after
                   you&apos;re happy with the resume.
                 </div>
