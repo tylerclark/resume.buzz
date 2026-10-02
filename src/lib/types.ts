@@ -156,7 +156,7 @@ export const PIPELINE_STEPS = [
 export const isJobStage = (s: unknown): s is JobStage => typeof s === "string" && s in JOB_STAGES;
 export const stageInFlight = (s: JobStage) => s !== "done" && s !== "failed";
 
-// A job an API client submitted that the user hasn't opened yet: sorts first and shows the triage card.
+// A job an API client submitted that the user hasn't opened yet: sorts first in the default order and shows the triage card.
 export const isBackground = (j: { source: string; seenAt: Date | string | null }) => j.source !== "app" && !j.seenAt;
 
 // Validates a job posting URL (http(s), real hostname). Returns the normalized URL or null.
