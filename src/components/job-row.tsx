@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { JobSummary } from "@/lib/data";
-import { JOB_STAGES, JOB_STATUSES, stageInFlight } from "@/lib/types";
+import { companyFromUrl, JOB_STAGES, JOB_STATUSES, stageInFlight } from "@/lib/types";
 import { hostOf, Spinner } from "./app-header";
 import { shownScore, useJobStatus } from "./job-status";
 import { StatusPicker, StatusPill } from "./status-picker";
@@ -22,7 +22,7 @@ export function when(d: Date) {
 export function ApiBadge() {
   return (
     <span
-      title="Submitted through the API and prepared in the background."
+      title="Submitted through the API."
       className="flex-none text-[10.5px] font-bold uppercase tracking-[.04em] text-brand bg-brand-tint border border-brand-line px-1.5 py-px rounded-full leading-4"
     >
       API
@@ -62,6 +62,9 @@ export function JobRow({
   const live = useJobStatus(stageInFlight(h.stage) ? h.id : null) ?? h;
   const working = stageInFlight(live.stage);
   const failed = live.stage === "failed";
+  const pending = live.stage === "pending";
+  // Always say who the employer is, even before (or without) a successful extraction.
+  const company = live.company || h.company || companyFromUrl(h.url);
   const title = live.title || h.title || hostOf(h.url) || "Pasted posting";
   return (
     <div
@@ -87,7 +90,7 @@ export function JobRow({
             className="w-[32px] h-[32px] flex-none rounded-[9px] text-white grid place-items-center font-extrabold text-[12.5px]"
             style={{ background: failed ? "var(--color-bad)" : TINTS[i % TINTS.length] }}
           >
-            {failed ? "!" : (live.company || title)[0]?.toUpperCase()}
+            {failed ? "!" : (company || title)[0]?.toUpperCase()}
           </div>
         )}
         <div className="min-w-0">
@@ -95,19 +98,25 @@ export function JobRow({
             <div className="font-semibold text-[13px] truncate text-ink">{title}</div>
             {h.source !== "app" && <ApiBadge />}
           </div>
-          <div className={`text-[11.5px] truncate ${working ? "text-brand" : failed ? "text-bad" : "text-subtle"}`}>
-            {working
-              ? `${JOB_STAGES[live.stage].label}…`
-              : failed
-                ? "Failed · click to retry"
-                : `${live.company} · ${when(h.createdAt)}${applied}`}
+          <div className="text-[11.5px] truncate text-subtle">
+            {company && <span className="font-semibold text-muted">{company}</span>}
+            {company && " · "}
+            {working ? (
+              <span className="text-brand">{JOB_STAGES[live.stage].label}…</span>
+            ) : failed ? (
+              <span className="text-bad">Failed · click to retry</span>
+            ) : pending ? (
+              <span className="text-brand">Needs your approval · {when(h.createdAt)}</span>
+            ) : (
+              `${when(h.createdAt)}${applied}`
+            )}
           </div>
         </div>
       </Link>
       {!working &&
         !failed &&
         (readOnly ? <StatusPill status={h.status} /> : <StatusPicker key={h.status} jobId={h.id} status={h.status} />)}
-      {!working && !failed && (
+      {!working && !failed && !pending && (
         <div className="text-[11.5px] font-bold text-ok-ink bg-ok-bg px-[7px] py-[3px] rounded-full">
           {shownScore(live)}%
         </div>

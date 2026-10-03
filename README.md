@@ -83,22 +83,22 @@ flowchart LR
 
 ## API
 
-Scripts and agents can submit jobs to be tailored in the background. Create a token under **account menu → API tokens** (shown once; only its SHA-256 is stored), then:
+Scripts and agents can submit jobs as leads. A submitted job waits in the app until you approve it; nothing is fetched or sent to the model (and no credits are spent) before that. Create a token under **account menu → API tokens** (shown once; only its SHA-256 is stored), then:
 
 ```sh
 curl -X POST https://resume.buzz/api/jobs \
   -H "Authorization: Bearer rb_…" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://jobs.example.com/123", "source": "my-agent", "notes": "Strong fit"}'
-# → 202 {"id": "…", "stage": "queued", "link": "https://resume.buzz/j/…", "duplicate": false}
+# → 202 {"id": "…", "stage": "pending", "link": "https://resume.buzz/j/…", "duplicate": false}
 ```
 
 - **Body**: `url` and/or `description` (pasted posting text, 200+ chars), plus optional `title`, `company`, `notes`, `comp`, `priority`, `source` (a label shown in the app), `prompt`. Unknown fields are ignored. Send an array (or `{"jobs": […]}`) for up to 10 at once.
 - **Dedupe**: a URL you already have (ignoring `utm_*` and similar tracking params) returns the existing job with `"duplicate": true`.
-- **Status**: `GET /api/jobs?ids=a,b` with the same token. `stage` goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
+- **Status**: `GET /api/jobs?ids=a,b` with the same token. `stage` stays `pending` until you approve the job in the app, then goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
 - **Limits**: 50 API jobs per rolling 24 hours per user. Tokens only work on `/api/jobs`.
 
-In the app, submitted jobs sort to the top of Recent with a **Background** badge until opened, and the job view has one-click **No longer interested** / **Mark applied**.
+In the app, submitted jobs sort to the top of Recent until opened and carry an **API** badge. Opening one shows who sent it, its notes, and **Tailor resume** / **Not interested**; once tailored, the same card offers **No longer interested** / **Mark applied**.
 
 ## Stack
 

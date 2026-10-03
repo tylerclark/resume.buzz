@@ -84,7 +84,7 @@ export function ApiTokensDialog({ onClose }: { onClose: () => void }) {
           <div className="min-w-0 flex-1">
             <div className="font-extrabold text-[16px] tracking-[-.01em]">API tokens</div>
             <div className="text-[12.5px] text-subtle mt-0.5">
-              Let a script or agent submit jobs. They&apos;re tailored in the background and show up here with an
+              Let a script or agent submit jobs. They wait for your approval before anything is tailored, and show up here with an
               API badge.
             </div>
           </div>
@@ -176,7 +176,8 @@ export function ApiTokensDialog({ onClose }: { onClose: () => void }) {
               Send <code className="font-mono">url</code> and/or <code className="font-mono">description</code>, plus
               optional <code className="font-mono">title</code>, <code className="font-mono">company</code>,{" "}
               <code className="font-mono">notes</code>, <code className="font-mono">source</code>. Up to 10 at once as an
-              array. Poll <code className="font-mono">GET /api/jobs?ids=…</code> for progress.
+              array. Jobs wait in the app until you approve them; nothing is tailored (or billed) before that. Poll{" "}
+              <code className="font-mono">GET /api/jobs?ids=…</code> for progress.
             </p>
           </div>
         </div>

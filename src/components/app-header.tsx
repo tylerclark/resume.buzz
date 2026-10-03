@@ -7,7 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { ApiTokensDialog } from "./api-tokens-dialog";
 import { ChatButton } from "./chat-panel";
 import { THEMES, useTheme, type Theme } from "./theme";
-import { JOB_STAGES, stageInFlight } from "@/lib/types";
+import { companyFromUrl, explainError, JOB_STAGES, stageInFlight } from "@/lib/types";
 import { isBusy, shownScore, useJobStatuses, type JobStatus } from "./job-status";
 import { Logo } from "./logo";
 import { confirmLeave, hrefForTab, HOME_TAB, tabIdForPath, useTabs } from "./tabs-store";
@@ -147,6 +147,9 @@ function TabChip({
 }) {
   const busy = isBusy(status);
   const failed = status?.stage === "failed";
+  const pending = status?.stage === "pending";
+  const company = status ? status.company || companyFromUrl(status.url) : "";
+  const err = failed ? explainError(status?.error) : null;
   const label = status ? status.title || hostOf(status.url) || (busy ? "Loading…" : "Pasted posting") : "Loading…";
   const detail = !status
     ? ""
@@ -155,8 +158,10 @@ function TabChip({
         : status.coverStage === "writing"
           ? "Writing cover letter…"
           : failed
-            ? status.error || "Failed"
-            : status.company;
+            ? [company, err?.title ?? err?.detail ?? "Failed"].filter(Boolean).join(" · ")
+            : pending
+              ? [company, "Needs your approval"].filter(Boolean).join(" · ")
+              : company;
 
   return (
     <div
@@ -193,7 +198,7 @@ function TabChip({
           )}
         </span>
       </Link>
-      {status && !busy && !failed && (
+      {status && !busy && !failed && !pending && (
         <span className="flex-none text-[10.5px] font-bold text-ok-ink bg-ok-bg px-1.5 py-px rounded-full leading-4">
           {shownScore(status)}%
         </span>
@@ -225,7 +230,7 @@ function TabIcon({ busy, failed, status }: { busy: boolean; failed: boolean; sta
     );
   return (
     <span className="flex-none w-[18px] h-[18px] rounded-[5px] bg-ink text-on-ink grid place-items-center text-[10.5px] leading-none font-extrabold">
-      {(status?.company || status?.title || "?")[0]?.toUpperCase()}
+      {(status?.company || companyFromUrl(status?.url ?? "") || status?.title || "?")[0]?.toUpperCase()}
     </span>
   );
 }

@@ -122,11 +122,12 @@ async function run(id: string, userId: string, from: JobStage) {
 // Create the row and schedule the full pipeline. Returns immediately with the new id. Either a URL to
 // scrape or a pasted description (with an optional URL kept only as the link back to the posting).
 // API submissions pass `meta`: where it came from, notes, and title/company to show until extraction.
+// With `hold`, the row is only created ("pending"): nothing runs until the user approves it in the app.
 export async function startJob(
   userId: string,
   source: { url: string; description?: string },
   prompt: string,
-  meta: { source?: string; notes?: string; title?: string; company?: string } = {},
+  meta: { source?: string; notes?: string; title?: string; company?: string; hold?: boolean } = {},
 ) {
   const id = crypto.randomUUID();
   const raw = source.description?.trim() ?? "";
@@ -139,12 +140,25 @@ export async function startJob(
     company: meta.company ?? "",
     raw,
     prompt,
-    stage: "queued",
+    stage: meta.hold ? "pending" : "queued",
     source: meta.source ?? "app",
     notes: meta.notes ?? "",
   });
-  after(() => run(id, userId, raw ? "extracting" : "scraping"));
+  if (!meta.hold) after(() => run(id, userId, raw ? "extracting" : "scraping"));
   return id;
+}
+
+// The user approved a job that was waiting ("pending"): run the full pipeline. The update is conditional
+// on the stage so approving twice (two tabs, a double click) starts it once.
+export async function approveJob(row: Job) {
+  const rows = await db
+    .update(job)
+    .set({ stage: "queued", error: null, updatedAt: new Date() })
+    .where(and(eq(job.id, row.id), eq(job.userId, row.userId), eq(job.stage, "pending")))
+    .returning({ id: job.id });
+  if (rows.length === 0) return false;
+  after(() => run(row.id, row.userId, row.raw ? "extracting" : "scraping"));
+  return true;
 }
 
 // Re-run just the tailoring step (e.g. with an edited prompt, or after the base resume changed).

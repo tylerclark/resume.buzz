@@ -15,6 +15,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]/t
   if (!row) return Response.json({ error: "Not found" }, { status: 404 });
   if (!base) return Response.json({ error: "Add your base resume first." }, { status: 400 });
   if (stageInFlight(row.stage)) return Response.json({ error: "This job is already being tailored." }, { status: 409 });
+  if (row.stage === "pending") return Response.json({ error: "Approve this job first." }, { status: 409 });
   if (!row.raw) return Response.json({ error: "This job never finished loading. Retry it first." }, { status: 409 });
 
   const { prompt } = (await request.json()) as { prompt?: string };

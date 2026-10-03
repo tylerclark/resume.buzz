@@ -14,9 +14,6 @@ import {
   parseJobUrl,
 } from "@/lib/types";
 
-// `after()` work (the pipelines) runs within this route's duration budget.
-export const maxDuration = 300;
-
 // Both methods accept a session cookie or `Authorization: Bearer rb_…` (a personal API token).
 async function caller(request: Request) {
   return (await userFromRequest(request)) ?? (await userFromToken(request));
@@ -56,8 +53,7 @@ export async function GET(request: Request) {
   return Response.json({ jobs }, { headers: { "Cache-Control": "no-store" } });
 }
 
-// API submissions per rolling 24h. Every job runs several model calls, so this caps the bill if a
-// token leaks or a script loops.
+// API submissions per rolling 24h, so a leaked token or a looping script can't flood the list.
 const DAILY_LIMIT = 50;
 const MAX_BATCH = 10;
 
@@ -88,8 +84,9 @@ const JobInput = z
       ctx.addIssue({ code: "custom", path: ["description"], message: `At least ${MIN_DESCRIPTION} characters.` });
   });
 
-// Submit one job ({…}), or several ([…] or { jobs: […] }). Each is tailored in the background and shows
-// up in the app with an "API" badge. Re-submitting a URL you already have returns the existing job.
+// Submit one job ({…}), or several ([…] or { jobs: […] }). Each shows up in the app with an "API" badge and
+// waits there ("pending") until the user approves it; only then is it tailored, so a script can't spend
+// model credits on its own. Re-submitting a URL you already have returns the existing job.
 export async function POST(request: Request) {
   const user = await caller(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -128,7 +125,7 @@ export async function POST(request: Request) {
     const existing = url ? (seen.get(url) ?? (await findJobIdByUrl(user.id, url))) : null;
     if (existing) {
       const [row] = await listJobsByIds(user.id, [existing]);
-      results.push({ ...describe(origin, existing, row?.stage ?? "queued"), duplicate: true });
+      results.push({ ...describe(origin, existing, row?.stage ?? "pending"), duplicate: true });
       continue;
     }
     if (remaining <= 0) {
@@ -145,9 +142,10 @@ export async function POST(request: Request) {
       notes,
       title: j.title,
       company: j.company,
+      hold: true,
     });
     if (url) seen.set(url, id);
-    results.push({ ...describe(origin, id, "queued"), duplicate: false });
+    results.push({ ...describe(origin, id, "pending"), duplicate: false });
   }
 
   if (single) {

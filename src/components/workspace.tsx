@@ -6,6 +6,8 @@ import type { Job } from "@/db/schema";
 import { alignToBase } from "@/lib/align";
 import type { JobSummary } from "@/lib/data";
 import {
+  companyFromUrl,
+  explainError,
   DEFAULT_COVER_STARTERS,
   DEFAULT_PROMPT,
   hasUserEdits,
@@ -73,7 +75,7 @@ export function Workspace({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [draft, setDraft] = useState<StoredTailored | null>(null); // non-null = editing the tailored resume
   const [savingDraft, setSavingDraft] = useState(false);
-  const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "delete" | "status" | null>(null);
+  const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "approve" | "delete" | "status" | null>(null);
   const [pdf, setPdf] = useState<"busy" | "failed" | null>(null);
   // True from the moment a re-tailor is requested until the server confirms it's queued, so the resume
   // pane reacts on click instead of waiting a round-trip (or two, when facts are saved first).
@@ -92,6 +94,11 @@ export function Workspace({
   const hasJob = !!job;
   const inFlight = !!job && stageInFlight(job.stage);
   const failed = job?.stage === "failed";
+  // Submitted through the API; nothing has run yet and won't until the user approves it.
+  const pending = job?.stage === "pending";
+  // Who the employer is, even before (or without) a successful extraction.
+  const company = job ? job.company || companyFromUrl(job.url) : "";
+  const failure = failed ? explainError(job?.error) : null;
   const hasResume = !!job?.tailored;
   // Re-running tailoring on a job that already has a resume (prompt change, base change, new facts).
   const regen = inFlight && hasResume;
@@ -101,7 +108,7 @@ export function Workspace({
   const building = inFlight && !hasResume;
   const cover = job?.coverLetter ?? null;
   const coverBusy = job?.coverStage === "writing";
-  const coverReady = !!job?.raw && !inFlight;
+  const coverReady = !!job?.raw && !inFlight && !pending;
 
   // --- Keep this job in sync with the background pipeline ---------------------------------------
   // Tell the poller what the server just rendered, and register for updates.
@@ -274,6 +281,11 @@ export function Workspace({
     await kick("/retry", { method: "POST" }, { stage: "queued", error: null }, "retry");
   }
 
+  // Start tailoring a job that came in through the API and was waiting for a go-ahead.
+  async function approve() {
+    await kick("/approve", { method: "POST" }, { stage: "queued", error: null }, "approve");
+  }
+
   // Removing a job that's still working also cancels it.
   async function discard() {
     if (!job) return;
@@ -301,7 +313,11 @@ export function Workspace({
     const body = await res.json().catch(() => ({}));
     setBusyAction(null);
     if (!res.ok) return setError(body.error ?? "That didn't work.");
-    setJob({ ...job, ...body });
+    // Turning down a job that was never tailored leaves nothing to look at here.
+    if (pending && status === "withdrawn") {
+      tabs.close(job.id);
+      router.replace("/");
+    } else setJob({ ...job, ...body });
     router.refresh();
   }
 
@@ -391,7 +407,7 @@ export function Workspace({
               <Spinner className="w-8 h-8 border-[3px]" />
             ) : (
               <div className="w-8 h-8 rounded-lg bg-ink text-on-ink grid place-items-center font-extrabold text-[14px] flex-none">
-                {(job.company || job.title || hostOf(job.url))[0]?.toUpperCase()}
+                {(company || job.title || hostOf(job.url))[0]?.toUpperCase()}
               </div>
             )}
             <div className="min-w-0 flex-1">
@@ -413,12 +429,17 @@ export function Workspace({
                   {job.title || "Pasted posting"}
                 </div>
               )}
-              <div className={`text-[12px] truncate ${inFlight ? "text-brand" : failed ? "text-bad" : "text-muted"}`}>
-                {inFlight
-                  ? `${JOB_STAGES[job.stage].label}…`
-                  : failed && !hasResume
-                    ? "Failed"
-                    : [job.company, job.location].filter(Boolean).join(" · ")}
+              <div className="text-[12px] truncate text-muted">
+                {inFlight || pending || (failed && !hasResume) ? (
+                  <>
+                    {company && <span className="font-semibold">{company} · </span>}
+                    <span className={failed ? "text-bad" : "text-brand"}>
+                      {failed ? "Failed" : pending ? JOB_STAGES.pending.label : `${JOB_STAGES[job.stage].label}…`}
+                    </span>
+                  </>
+                ) : (
+                  [company, job.location].filter(Boolean).join(" · ")
+                )}
               </div>
             </div>
             {hasResume && <StatusPicker key={job.status} jobId={job.id} status={job.status} />}
@@ -504,12 +525,16 @@ export function Workspace({
             </>
           )}
 
-          {job && job.source !== "app" && job.status === "not_applied" && (
+          {job && job.source !== "app" && (job.status === "not_applied" || pending) && (
             <BackgroundCard
               job={job}
+              company={company}
               ready={!inFlight && hasResume}
-              busy={busyAction === "status"}
+              busy={!!busyAction}
+              error={pending ? error : null}
               onStatus={setStatus}
+              onApprove={pending ? approve : undefined}
+              approving={busyAction === "approve"}
             />
           )}
 
@@ -525,20 +550,46 @@ export function Workspace({
 
           {job && failed && (
             <div className="bg-surface border border-bad-line rounded-[14px] px-[18px] py-4 flex flex-col gap-3">
-              <div className="flex gap-2.5 items-start">
-                <span className="w-5 h-5 rounded-full bg-bad-bg text-bad grid place-items-center text-[12px] font-extrabold flex-none">
+              <div className="flex gap-3 items-start">
+                <span className="w-7 h-7 rounded-full bg-bad-bg text-bad grid place-items-center text-[14px] font-extrabold flex-none">
                   !
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-[14px]">{hasResume ? "Re-tailoring failed" : "Tailoring failed"}</div>
-                  <div className="text-[12.5px] text-muted leading-[1.5] mt-0.5 break-words">
-                    {job.error || "Something went wrong."}
+                  <div className="eyebrow text-bad">{hasResume ? "Re-tailoring failed" : "Tailoring failed"}</div>
+                  <div className="font-bold text-[14.5px] leading-snug mt-0.5">
+                    {failure?.title ?? "Something went wrong"}
                   </div>
-                  {!hasResume && (
-                    <div className="text-[12px] text-subtle break-all mt-1.5">{job.url || "Pasted description"}</div>
+                  <div className="text-[13px] text-muted leading-[1.5] mt-1 break-words">{failure?.detail}</div>
+                  {failure?.link && (
+                    <a
+                      href={failure.link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block mt-1.5 text-[13px] font-semibold text-brand hover:underline"
+                    >
+                      {failure.link.label} ↗
+                    </a>
                   )}
                 </div>
               </div>
+              {!hasResume && (
+                <div className="flex items-center gap-2 min-w-0 bg-canvas rounded-[10px] px-3 py-2 text-[12.5px]">
+                  {company && <span className="font-bold text-ink flex-none">{company}</span>}
+                  {job.url ? (
+                    <a
+                      href={job.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={job.url}
+                      className="min-w-0 truncate text-subtle hover:text-brand"
+                    >
+                      {job.title || job.url.replace(/^https?:\/\/(www\.)?/, "")}
+                    </a>
+                  ) : (
+                    <span className="min-w-0 truncate text-subtle">{job.title || "Pasted description"}</span>
+                  )}
+                </div>
+              )}
               {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
               <div className="flex gap-2 justify-end">
                 <button onClick={discard} disabled={!!busyAction} className={btnGhost}>
@@ -615,7 +666,7 @@ export function Workspace({
               </button>
             )}
             <div className="ml-auto flex gap-2 items-center">
-              {(!hasJob || building) && (
+              {(!hasJob || building || pending) && (
                 <span className="text-[12.5px] text-faint whitespace-nowrap">
                   {building ? "Showing your base resume while this tailors" : "Showing your base resume"}
                 </span>
@@ -1084,16 +1135,26 @@ function ProgressCard({
 
 // Shown on a job that came in through the API until it's triaged: where it came from, the client's
 // notes, and the two usual outcomes.
+// While the job is waiting for approval (`onApprove`), the card is the approval prompt instead: who's
+// hiring, the posting, and a button to start tailoring. Nothing is fetched or sent to the model before that.
 function BackgroundCard({
   job,
+  company,
   ready,
   busy,
+  error,
   onStatus,
+  onApprove,
+  approving,
 }: {
   job: Job;
+  company: string;
   ready: boolean;
   busy: boolean;
+  error?: string | null;
   onStatus: (s: JobStatus) => void;
+  onApprove?: () => void;
+  approving?: boolean;
 }) {
   return (
     <div className="bg-surface border border-brand-line rounded-[14px] px-[18px] py-4 flex flex-col gap-3">
@@ -1103,21 +1164,49 @@ function BackgroundCard({
           Sent by <span className="font-semibold text-ink">{job.source}</span> · {when(job.createdAt)}
         </span>
       </div>
+      {onApprove && (
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="font-bold text-[14.5px] leading-snug">
+            {company ? `Tailor your resume for ${company}?` : "Tailor your resume for this job?"}
+          </div>
+          {job.url && (
+            <a
+              href={job.url}
+              target="_blank"
+              rel="noreferrer"
+              title={job.url}
+              className="text-[12.5px] text-subtle truncate hover:text-brand"
+            >
+              {job.title || job.url.replace(/^https?:\/\/(www\.)?/, "")} ↗
+            </a>
+          )}
+          <div className="text-[12.5px] text-subtle leading-[1.5] mt-1">
+            Nothing has run yet. Approving fetches the posting and tailors your resume, which uses AI credits.
+          </div>
+        </div>
+      )}
       {job.notes && (
         <p className="m-0 text-[13px] text-muted leading-[1.55] whitespace-pre-wrap break-words">{job.notes}</p>
       )}
+      {error && <p className="m-0 text-[12.5px] text-bad">{error}</p>}
       <div className="flex gap-2 justify-end">
         <button onClick={() => onStatus("withdrawn")} disabled={busy} className={btnGhost}>
-          No longer interested
+          {onApprove ? "Not interested" : "No longer interested"}
         </button>
-        <button
-          onClick={() => onStatus("applied")}
-          disabled={busy || !ready}
-          title={ready ? undefined : "Available once the resume is tailored"}
-          className={btnPrimary}
-        >
-          Mark applied
-        </button>
+        {onApprove ? (
+          <button onClick={onApprove} disabled={busy} className={btnPrimary}>
+            {approving ? "Starting…" : "Tailor resume"}
+          </button>
+        ) : (
+          <button
+            onClick={() => onStatus("applied")}
+            disabled={busy || !ready}
+            title={ready ? undefined : "Available once the resume is tailored"}
+            className={btnPrimary}
+          >
+            Mark applied
+          </button>
+        )}
       </div>
     </div>
   );

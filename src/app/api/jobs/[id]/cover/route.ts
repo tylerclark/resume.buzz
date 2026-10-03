@@ -16,7 +16,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]/c
   const [row, base] = await Promise.all([getJob(user.id, id), getBaseResume(user.id)]);
   if (!row) return Response.json({ error: "Not found" }, { status: 404 });
   if (!base) return Response.json({ error: "Add your base resume first." }, { status: 400 });
-  if (stageInFlight(row.stage) || !row.raw)
+  if (stageInFlight(row.stage) || row.stage === "pending" || !row.raw)
     return Response.json({ error: "Wait for the resume to finish tailoring first." }, { status: 409 });
   if (row.coverStage === "writing")
     return Response.json({ error: "A cover letter is already being written." }, { status: 409 });

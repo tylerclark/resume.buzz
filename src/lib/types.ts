@@ -135,6 +135,8 @@ export const DEFAULT_SORT: { key: JobSort; dir: SortDir } = { key: "status", dir
 // Where a job is in the scrape → extract → score → tailor pipeline. The work runs on the server after the
 // request that started it returns, so any tab (or a fresh page load) can pick up progress by polling.
 export const JOB_STAGES = {
+  // Submitted through the API and waiting for the user to approve it. Nothing runs (or is billed) until then.
+  pending: { label: "Waiting for your approval", sub: "" },
   queued: { label: "Queued", sub: "Waiting to start" },
   scraping: { label: "Fetching the posting", sub: "Firecrawl renders the page and strips nav, footers and cookie banners" },
   extracting: { label: "Extracting the job", sub: "Title, company, pay, requirements, keywords" },
@@ -154,7 +156,7 @@ export const PIPELINE_STEPS = [
   "rescoring",
 ] as const satisfies JobStage[];
 export const isJobStage = (s: unknown): s is JobStage => typeof s === "string" && s in JOB_STAGES;
-export const stageInFlight = (s: JobStage) => s !== "done" && s !== "failed";
+export const stageInFlight = (s: JobStage) => s !== "done" && s !== "failed" && s !== "pending";
 
 // A job an API client submitted that the user hasn't opened yet: sorts first in the default order and shows the triage card.
 export const isBackground = (j: { source: string; seenAt: Date | string | null }) => j.source !== "app" && !j.seenAt;
@@ -185,6 +187,36 @@ export function canonicalJobUrl(url: string): string {
   return u.toString();
 }
 
+// A best guess at the employer from a posting URL, for jobs whose company isn't known yet (not extracted,
+// or extraction failed). Hosted job boards put the company in the first path segment or the subdomain;
+// anything else is taken to be the company's own site.
+export function companyFromUrl(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return "";
+  }
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  const first = decodeURIComponent(u.pathname.split("/").filter(Boolean)[0] ?? "");
+  const pretty = (slug: string) =>
+    slug
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((w) => w[0].toUpperCase() + w.slice(1))
+      .join(" ");
+
+  if (/(^|\.)(ashbyhq\.com|greenhouse\.io|lever\.co|workable\.com|smartrecruiters\.com|breezy\.hr|rippling\.com|gem\.com)$/.test(host) && /^(jobs|boards|job-boards|apply|ats)\./.test(host))
+    return /^[\w-]{2,}$/.test(first) && !/^(embed|j|jobs?)$/i.test(first) ? pretty(first) : "";
+  const sub = /^([\w-]+)\.(?:wd\d+\.)?(myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|breezy\.hr|applytojob\.com|jobs\.personio\.(?:com|de))$/.exec(host);
+  if (sub) return pretty(sub[1]);
+  // Aggregators say nothing about who's hiring.
+  if (/(^|\.)(linkedin|indeed|glassdoor|ziprecruiter|wellfound|ycombinator|builtin|dice|monster|google)\.[a-z.]+$/.test(host)) return "";
+  const parts = host.replace(/^(jobs|careers|career|apply|boards|work|hire)\./, "").split(".");
+  const name = parts.length > 2 && parts[parts.length - 2].length <= 3 ? parts[parts.length - 3] : parts[parts.length - 2];
+  return name ? pretty(name) : "";
+}
+
 export const MIN_DESCRIPTION = 200;
 export const MAX_DESCRIPTION = 60_000;
 
@@ -194,6 +226,45 @@ export type CoverStage = "idle" | "writing" | "failed";
 // without recording a failure). Longer than any single step should take under the 300s route limit.
 export const STAGE_TIMEOUT_MS = 5 * 60_000;
 export const STAGE_TIMEOUT_MESSAGE = "This took too long and was stopped. Try again.";
+
+// Turns a stored pipeline error into something worth showing. Provider failures arrive as a status code
+// plus a JSON blob ('402 {"error":{"message":"…","type":"insufficient_funds"}}'); the common ones get a
+// plain explanation, the rest are reduced to the provider's own message.
+export function explainError(raw: string | null | undefined): { title: string | null; detail: string; link?: { href: string; label: string } } {
+  const text = (raw ?? "").trim();
+  if (!text) return { title: null, detail: "Something went wrong." };
+
+  const m = /^(\d{3})\s*(\{[\s\S]*\})\s*$/.exec(text);
+  let code = m ? Number(m[1]) : 0;
+  let message = text;
+  let type = "";
+  if (m) {
+    try {
+      const body = JSON.parse(m[2]) as { error?: { message?: unknown; type?: unknown } | string; message?: unknown };
+      const err = typeof body.error === "object" && body.error ? body.error : undefined;
+      const found = err?.message ?? (typeof body.error === "string" ? body.error : body.message);
+      if (typeof found === "string" && found.trim()) message = found.trim();
+      if (typeof err?.type === "string") type = err.type;
+    } catch {
+      code = 0;
+    }
+  }
+
+  if (code === 402 || type === "insufficient_funds" || /credit balance/i.test(message)) {
+    const href = /https?:\/\/[^\s"']+/.exec(message)?.[0].replace(/[.,)]+$/, "");
+    return {
+      title: "Out of AI credits",
+      detail: "The AI provider account has no credits left, so nothing was tailored. Add credits, then retry.",
+      link: href ? { href, label: "Add credits" } : undefined,
+    };
+  }
+  if (code === 429 || /rate_limit|overloaded/i.test(type))
+    return { title: "The AI provider is busy", detail: "Too many requests right now. Wait a minute, then retry." };
+  if (code === 401 || code === 403 || /authentication|permission/i.test(type))
+    return { title: "The AI provider rejected the request", detail: "Its API key is missing, invalid or not allowed to use this model." };
+  if (code >= 500) return { title: "The AI provider had a problem", detail: "It returned an error on its side. Retry in a moment." };
+  return { title: null, detail: message };
+}
 
 export const EMPTY_RESUME: Resume = {
   name: "",
