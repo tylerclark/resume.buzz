@@ -18,7 +18,6 @@ export default async function JobPage({ params }: PageProps<"/j/[id]">) {
   return (
     <Workspace
       key={job.id}
-      user={{ name: user.name, email: user.email }}
       base={base}
       facts={facts}
       coverStarters={coverStarters}

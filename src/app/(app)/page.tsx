@@ -9,7 +9,6 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   return (
     <Workspace
-      user={{ name: user.name, email: user.email }}
       base={base}
       facts={facts}
       history={history}

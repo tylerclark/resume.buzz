@@ -37,6 +37,7 @@
     "@anthropic-ai/sdk": "^0.128.0",
     "@mendable/firecrawl-js": "^4.41.0",
     "@neondatabase/serverless": "^1.1.0",
+    "@react-pdf/renderer": "^4.9.0",
     "better-auth": "^1.7.6",
     "diff": "^9.0.0",
     "drizzle-orm": "^0.45.3",

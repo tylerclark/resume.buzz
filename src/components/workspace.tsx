@@ -43,7 +43,6 @@ const btnDark =
   "bg-ink hover:bg-ink-hover text-on-ink border-0 rounded-[9px] px-3.5 py-2 text-[13px] font-bold cursor-pointer whitespace-nowrap";
 
 export function Workspace({
-  user,
   base,
   facts,
   coverStarters,
@@ -51,7 +50,6 @@ export function Workspace({
   job: initialJob,
   autoUrl,
 }: {
-  user: { name: string; email: string };
   base: Resume | null;
   facts: Fact[];
   coverStarters?: string[];
@@ -76,6 +74,7 @@ export function Workspace({
   const [draft, setDraft] = useState<StoredTailored | null>(null); // non-null = editing the tailored resume
   const [savingDraft, setSavingDraft] = useState(false);
   const [busyAction, setBusyAction] = useState<"regen" | "cover" | "retry" | "delete" | "status" | null>(null);
+  const [pdf, setPdf] = useState<"busy" | "failed" | null>(null);
   // True from the moment a re-tailor is requested until the server confirms it's queued, so the resume
   // pane reacts on click instead of waiting a round-trip (or two, when facts are saved first).
   const [retailorPending, setRetailorPending] = useState(false);
@@ -306,16 +305,24 @@ export function Workspace({
     router.refresh();
   }
 
-  // The browser's "Save as PDF" uses document.title as the file name.
-  function downloadPdf() {
-    const who = base?.name.trim() || user.name || "Resume";
-    const kind = tab === "cover" ? "Cover Letter" : "Resume";
-    const target = job ? job.company || job.title : "";
-    const name = (target ? `${who} - ${kind} for ${target}` : `${who} - ${kind}`).replace(/[\\/:*?"<>|]+/g, "-");
-    const prev = document.title;
-    document.title = name;
-    window.addEventListener("afterprint", () => (document.title = prev), { once: true });
-    window.print();
+  // The server renders the PDF (real text, clickable links) and names the file.
+  async function downloadPdf() {
+    setPdf("busy");
+    try {
+      const query = new URLSearchParams({ kind: tab, tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      if (job) query.set("job", job.id);
+      const res = await fetch(`/api/pdf?${query}`, { cache: "no-store" });
+      if (!res.ok) throw new Error();
+      const name = res.headers.get("Content-Disposition")?.match(/filename\*=UTF-8''(.+)$/)?.[1];
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = name ? decodeURIComponent(name) : "Resume.pdf";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      setPdf(null);
+    } catch {
+      setPdf("failed");
+    }
   }
 
   function startEditing() {
@@ -671,13 +678,16 @@ export function Workspace({
                 </>
               )}
               {!editingHere && (
-                <button
-                  onClick={downloadPdf}
-                  disabled={!model || building || (tab === "cover" && !cover)}
-                  className={`${btnDark} disabled:opacity-50`}
-                >
-                  Download PDF
-                </button>
+                <>
+                  {pdf === "failed" && <span className="text-[12px] text-bad">Couldn&apos;t create the PDF.</span>}
+                  <button
+                    onClick={downloadPdf}
+                    disabled={!model || building || (tab === "cover" && !cover) || pdf === "busy"}
+                    className={`${btnDark} disabled:opacity-50`}
+                  >
+                    {pdf === "busy" ? "Preparing…" : "Download PDF"}
+                  </button>
+                </>
               )}
             </div>
           </div>

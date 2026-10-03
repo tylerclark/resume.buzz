@@ -204,7 +204,7 @@
   }
 }
 
-/* "Download PDF" = print just the document */
+/* Printing the page (Cmd+P) prints just the document; "Download PDF" is rendered by /api/pdf */
 @media print {
   @page {
     margin: 0.5in;

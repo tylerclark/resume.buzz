@@ -14,6 +14,15 @@ part of the application build.
 - Copyright: Neon, Inc. and contributors
 - License: Apache License 2.0 (full text in [`.agents/skills/LICENSE`](.agents/skills/LICENSE))
 
+## Fonts
+
+`src/assets/fonts/` holds the typefaces embedded in exported PDFs.
+
+- Source Serif 4. Copyright 2014 The Source Serif 4 Project Authors. SIL Open Font License 1.1
+  ([`SourceSerif4-OFL.txt`](src/assets/fonts/SourceSerif4-OFL.txt))
+- Plus Jakarta Sans. Copyright 2020 The Plus Jakarta Sans Project Authors. SIL Open Font License 1.1
+  ([`PlusJakartaSans-OFL.txt`](src/assets/fonts/PlusJakartaSans-OFL.txt))
+
 ## npm dependencies
 
 Runtime and development dependencies are pulled from npm at install time and are
