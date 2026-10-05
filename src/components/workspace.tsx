@@ -34,6 +34,7 @@ import { StatusPicker } from "./status-picker";
 import { baseModel, countChanges, DIFF_STYLES, ResumeDoc, tailoredModel } from "./resume-doc";
 import { useLeaveGuard, useTabs } from "./tabs-store";
 import { TailoredEditor } from "./tailored-editor";
+import { confirmDialog } from "./confirm-dialog";
 
 // Shared by the left (job) and right (resume) toolbars so they line up.
 const toolbar = "flex items-center min-h-[61px] box-border px-5 py-2.5 bg-surface border-b border-line flex-none";
@@ -260,7 +261,7 @@ export function Workspace({
       !skipConfirm &&
       job.tailored &&
       hasUserEdits(job.tailored) &&
-      !confirm("Regenerating replaces your manual edits. Continue?")
+      !(await confirmDialog({ message: "Regenerating replaces your manual edits. Continue?", confirmLabel: "Regenerate" }))
     )
       return;
     setRetailorPending(true);
@@ -290,7 +291,7 @@ export function Workspace({
   async function discard() {
     if (!job) return;
     const msg = inFlight ? "Stop tailoring this job and remove it?" : "Remove this job?";
-    if (!confirm(msg)) return;
+    if (!(await confirmDialog({ message: msg, confirmLabel: "Remove", danger: true }))) return;
     setBusyAction("delete");
     const res = await fetch(`/api/jobs/${job.id}`, { method: "DELETE" });
     setBusyAction(null);
@@ -383,7 +384,14 @@ export function Workspace({
 
   async function generateCover() {
     if (!job || coverBusy) return;
-    if (cover && !confirm("Replace the current letter (including any edits) with a new one?")) return;
+    if (
+      cover &&
+      !(await confirmDialog({
+        message: "Replace the current letter (including any edits) with a new one?",
+        confirmLabel: "Replace",
+      }))
+    )
+      return;
     await kick(
       "/cover",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: coverPrompt }) },

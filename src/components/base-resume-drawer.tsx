@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EMPTY_RESUME, type Entry, type Fact, type Resume } from "@/lib/types";
 import { AutoTextarea } from "./auto-textarea";
+import { confirmDialog } from "./confirm-dialog";
 
 const card = "bg-surface border border-line-2 rounded-[14px] px-5 py-[18px] flex flex-col gap-2.5";
 const field =
@@ -159,20 +160,19 @@ export function BaseResumeDrawer({
     setStatus("idle");
   };
 
-  const close = () => {
-    if (dirty && !confirm("Discard unsaved changes to your base resume?")) return;
+  const close = useCallback(async () => {
+    const discard = { message: "Discard unsaved changes to your base resume?", confirmLabel: "Discard", danger: true };
+    if (dirty && !(await confirmDialog(discard))) return;
     onClose();
-  };
+  }, [dirty, onClose]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (dirty && !confirm("Discard unsaved changes to your base resume?")) return;
-      onClose();
+      if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dirty, onClose]);
+  }, [close]);
 
   async function save() {
     setStatus("saving");

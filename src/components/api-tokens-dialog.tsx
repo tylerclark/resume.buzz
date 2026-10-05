@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { confirmDialog } from "./confirm-dialog";
 
 type Token = { id: string; name: string; hint: string; lastUsedAt: string | null; createdAt: string };
 
@@ -52,7 +53,8 @@ export function ApiTokensDialog({ onClose }: { onClose: () => void }) {
   }
 
   async function revoke(t: Token) {
-    if (!confirm(`Revoke "${t.name}"? Anything using it stops working.`)) return;
+    const message = `Revoke "${t.name}"? Anything using it stops working.`;
+    if (!(await confirmDialog({ message, confirmLabel: "Revoke", danger: true }))) return;
     const res = await fetch(`/api/tokens/${t.id}`, { method: "DELETE" });
     if (!res.ok && res.status !== 404) return setError("Couldn't revoke it. Try again.");
     setTokens((ts) => ts?.filter((x) => x.id !== t.id) ?? null);

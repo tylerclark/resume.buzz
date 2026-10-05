@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Source_Serif_4 } from "next/font/google";
+import { ConfirmHost } from "@/components/confirm-dialog";
 import { ThemeProvider, ThemeScript } from "@/components/theme";
 import "./globals.css";
 
@@ -28,7 +29,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ThemeScript />
       </head>
       <body className="font-sans">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <ConfirmHost />
+        </ThemeProvider>
       </body>
     </html>
   );

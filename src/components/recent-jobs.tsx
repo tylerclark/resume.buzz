@@ -6,6 +6,7 @@ import type { JobSummary } from "@/lib/data";
 import { DEFAULT_SORT, isJobSort, isSortDir, JOB_SORTS, type JobSort, type SortDir, stageInFlight } from "@/lib/types";
 import { JobRow } from "./job-row";
 import { useTabs } from "./tabs-store";
+import { alertDialog, confirmDialog } from "./confirm-dialog";
 
 const PAGE = 25;
 const SORT_KEY = "resume.buzz:recentSort";
@@ -140,10 +141,10 @@ export function RecentJobs({ initial }: { initial: JobSummary[] }) {
   // Removing a job that's still working also cancels it.
   async function remove(j: JobSummary) {
     const msg = stageInFlight(j.stage) ? "Stop tailoring this job and remove it?" : "Remove this job?";
-    if (!confirm(msg)) return;
+    if (!(await confirmDialog({ message: msg, confirmLabel: "Remove", danger: true }))) return;
     const res = await fetch(`/api/jobs/${j.id}`, { method: "DELETE" });
     if (!res.ok && res.status !== 404) {
-      alert("Couldn't remove it. Try again.");
+      alertDialog("Couldn't remove it. Try again.");
       return;
     }
     setJobs((prev) => prev.filter((x) => x.id !== j.id));
