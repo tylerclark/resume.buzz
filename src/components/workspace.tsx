@@ -406,7 +406,12 @@ export function Workspace({
     }`;
 
   return (
-    <div className="flex-1 min-h-0 grid grid-cols-[minmax(320px,5fr)_minmax(0,7fr)]">
+    <div
+      className={`flex-1 min-h-0 grid ${
+        // Home gives the job list half the page, so each row has room for the pay range.
+        job ? "grid-cols-[minmax(320px,5fr)_minmax(0,7fr)]" : "grid-cols-[minmax(320px,1fr)_minmax(0,1fr)]"
+      }`}
+    >
       {/* LEFT: job summary */}
       <aside className="flex flex-col min-h-0 border-r border-line bg-panel">
         {job && (

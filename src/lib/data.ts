@@ -104,6 +104,7 @@ const summaryColumns = {
   url: job.url,
   title: job.title,
   company: job.company,
+  pay: job.pay,
   score: job.score,
   tailoredScore: job.tailoredScore,
   status: job.status,

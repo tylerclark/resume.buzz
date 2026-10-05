@@ -68,7 +68,7 @@ export function JobRow({
   const title = live.title || h.title || hostOf(h.url) || "Pasted posting";
   return (
     <div
-      className={`flex items-center gap-2.5 p-2 rounded-[10px] ${current ? "bg-brand-tint" : "hover:bg-canvas"} ${
+      className={`@container flex items-center gap-2.5 p-2 rounded-[10px] ${current ? "bg-brand-tint" : "hover:bg-canvas"} ${
         JOB_STATUSES[h.status].closed ? "opacity-60 hover:opacity-100" : ""
       }`}
     >
@@ -113,6 +113,15 @@ export function JobRow({
           </div>
         </div>
       </Link>
+      {/* Only where the row is wide enough (the Recent list, not the narrow history menu). */}
+      {!working && !failed && h.pay && (
+        <div
+          title={h.pay}
+          className="hidden @[640px]:block flex-none max-w-[180px] truncate text-[12px] font-semibold text-muted tabular-nums"
+        >
+          {h.pay}
+        </div>
+      )}
       {!working &&
         !failed &&
         (readOnly ? <StatusPill status={h.status} /> : <StatusPicker key={h.status} jobId={h.id} status={h.status} />)}
