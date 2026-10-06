@@ -1,14 +1,26 @@
 import { z } from "zod";
 import { userFromToken } from "@/lib/api-tokens";
-import { countRecentApiJobs, findJobIdByUrl, getBaseResume, listJobsByIds, searchJobs, userFromRequest } from "@/lib/data";
+import {
+  countRecentApiJobs,
+  findActedJobsByCompany,
+  findJobIdByUrl,
+  getBaseResume,
+  listJobsByIds,
+  searchJobs,
+  userFromRequest,
+} from "@/lib/data";
 import { startJob } from "@/lib/pipeline";
 import {
   canonicalJobUrl,
   DEFAULT_PROMPT,
   DEFAULT_SORT,
   isJobSort,
+  isJobStatus,
   isSortDir,
   JOB_SORTS,
+  JOB_STATUSES,
+  jobHost,
+  type JobStatus,
   MAX_DESCRIPTION,
   MIN_DESCRIPTION,
   parseJobUrl,
@@ -19,9 +31,14 @@ async function caller(request: Request) {
   return (await userFromRequest(request)) ?? (await userFromToken(request));
 }
 
+// Every status except "not applied": the user has acted on the job one way or another.
+const ACTED: JobStatus[] = (Object.keys(JOB_STATUSES) as JobStatus[]).filter((s) => s !== "not_applied");
+
 // Lightweight status for a set of jobs (tab bar + progress polling, and API clients): ?ids=a,b,c
 // Without ids: a page of the user's jobs, optionally filtered and sorted:
 //   ?q=acme&sort=score&dir=desc&offset=25&limit=25   (sort: status | score | applied | created | updated | title | company)
+//   ?status=applied,rejected   (any of the job statuses)   ?acted=1   (everything except not_applied)
+// Each job carries `company` and `host` (the posting's hostname) so agents can skip employers already dealt with.
 export async function GET(request: Request) {
   const user = await caller(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,14 +48,20 @@ export async function GET(request: Request) {
     const sort = params.get("sort");
     const dir = params.get("dir");
     const key = isJobSort(sort) ? sort : DEFAULT_SORT.key;
+    const status = (params.get("status") ?? "").split(",").map((s) => s.trim()).filter(isJobStatus);
+    const acted = /^(1|true|yes)$/i.test(params.get("acted") ?? "");
     const page = await searchJobs(user.id, {
       q: params.get("q") ?? "",
+      status: status.length ? status : acted ? ACTED : undefined,
       sort: key,
       dir: isSortDir(dir) ? dir : JOB_SORTS[key].dir,
       offset: Number(params.get("offset")) || 0,
       limit: Number(params.get("limit")) || 25,
     });
-    return Response.json(page, { headers: { "Cache-Control": "no-store" } });
+    return Response.json(
+      { ...page, jobs: page.jobs.map(withHost) },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   const ids = [
@@ -50,7 +73,11 @@ export async function GET(request: Request) {
     ),
   ].slice(0, 100);
   const jobs = await listJobsByIds(user.id, ids);
-  return Response.json({ jobs }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ jobs: jobs.map(withHost) }, { headers: { "Cache-Control": "no-store" } });
+}
+
+function withHost<T extends { url: string }>(j: T) {
+  return { ...j, host: jobHost(j.url) };
 }
 
 // API submissions per rolling 24h, so a leaked token or a looping script can't flood the list.
@@ -86,7 +113,9 @@ const JobInput = z
 
 // Submit one job ({…}), or several ([…] or { jobs: […] }). Each shows up in the app with an "API" badge and
 // waits there ("pending") until the user approves it; only then is it tailored, so a script can't spend
-// model credits on its own. Re-submitting a URL you already have returns the existing job.
+// model credits on its own. Re-submitting a URL you already have returns the existing job. A job at a
+// company the user has already applied to, been rejected by, etc. is still created (another role there
+// may be fine) but comes back with `companyConflict: true` and the jobs it clashes with.
 export async function POST(request: Request) {
   const user = await caller(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -121,11 +150,18 @@ export async function POST(request: Request) {
   for (const p of parsed) {
     const j = p.data!;
     const url = j.url ? canonicalJobUrl(parseJobUrl(j.url)!) : "";
+    const conflicts = async () => {
+      const clashes = await findActedJobsByCompany(user.id, j.company ?? "", url);
+      return {
+        companyConflict: clashes.length > 0,
+        conflicts: clashes.map((c) => ({ id: c.id, title: c.title, company: c.company, status: c.status, link: `${origin}/j/${c.id}` })),
+      };
+    };
 
     const existing = url ? (seen.get(url) ?? (await findJobIdByUrl(user.id, url))) : null;
     if (existing) {
       const [row] = await listJobsByIds(user.id, [existing]);
-      results.push({ ...describe(origin, existing, row?.stage ?? "pending"), duplicate: true });
+      results.push({ ...describe(origin, existing, row?.stage ?? "pending"), duplicate: true, ...(await conflicts()) });
       continue;
     }
     if (remaining <= 0) {
@@ -145,7 +181,7 @@ export async function POST(request: Request) {
       hold: true,
     });
     if (url) seen.set(url, id);
-    results.push({ ...describe(origin, id, "pending"), duplicate: false });
+    results.push({ ...describe(origin, id, "pending"), duplicate: false, ...(await conflicts()) });
   }
 
   if (single) {

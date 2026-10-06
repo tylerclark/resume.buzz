@@ -189,6 +189,41 @@ export function canonicalJobUrl(url: string): string {
   return u.toString();
 }
 
+// Job boards that list many employers' postings; their hostname says nothing about who's hiring.
+export function isAggregatorHost(host: string): boolean {
+  return /(^|\.)(linkedin|indeed|glassdoor|ziprecruiter|wellfound|ycombinator|builtin|dice|monster|google)\.[a-z.]+$/.test(host);
+}
+
+// Hosted ATS boards where every employer shares one hostname and the company is a path segment.
+const HOSTED_ATS = /(^|\.)(ashbyhq\.com|greenhouse\.io|lever\.co|workable\.com|smartrecruiters\.com|breezy\.hr|rippling\.com|gem\.com)$/;
+const hostedAts = (host: string) => HOSTED_ATS.test(host) && /^(jobs|boards|job-boards|apply|ats)\./.test(host);
+
+// A hostname many employers post under (aggregators and shared ATS boards), so matching on it says
+// nothing about the employer.
+export function isSharedJobHost(host: string): boolean {
+  return isAggregatorHost(host) || hostedAts(host) || host === "workatastartup.com";
+}
+
+// The posting's hostname, lowercased and without "www.", so clients can group jobs by employer site.
+// Empty for pasted postings without a link.
+export function jobHost(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+// Company names as typed or extracted vary in case, spacing and legal suffixes; compare them loosely.
+export function companyKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(inc|llc|ltd|corp|corporation|co|company|plc|gmbh)\b/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 // A best guess at the employer from a posting URL, for jobs whose company isn't known yet (not extracted,
 // or extraction failed). Hosted job boards put the company in the first path segment or the subdomain;
 // anything else is taken to be the company's own site.
@@ -208,12 +243,12 @@ export function companyFromUrl(url: string): string {
       .map((w) => w[0].toUpperCase() + w.slice(1))
       .join(" ");
 
-  if (/(^|\.)(ashbyhq\.com|greenhouse\.io|lever\.co|workable\.com|smartrecruiters\.com|breezy\.hr|rippling\.com|gem\.com)$/.test(host) && /^(jobs|boards|job-boards|apply|ats)\./.test(host))
+  if (hostedAts(host))
     return /^[\w-]{2,}$/.test(first) && !/^(embed|j|jobs?)$/i.test(first) ? pretty(first) : "";
   const sub = /^([\w-]+)\.(?:wd\d+\.)?(myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|breezy\.hr|applytojob\.com|jobs\.personio\.(?:com|de))$/.exec(host);
   if (sub) return pretty(sub[1]);
   // Aggregators say nothing about who's hiring.
-  if (/(^|\.)(linkedin|indeed|glassdoor|ziprecruiter|wellfound|ycombinator|builtin|dice|monster|google)\.[a-z.]+$/.test(host)) return "";
+  if (isAggregatorHost(host)) return "";
   const parts = host.replace(/^(jobs|careers|career|apply|boards|work|hire)\./, "").split(".");
   const name = parts.length > 2 && parts[parts.length - 2].length <= 3 ? parts[parts.length - 3] : parts[parts.length - 2];
   return name ? pretty(name) : "";

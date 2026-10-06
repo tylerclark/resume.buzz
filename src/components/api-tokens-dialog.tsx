@@ -179,7 +179,8 @@ export function ApiTokensDialog({ onClose }: { onClose: () => void }) {
               optional <code className="font-mono">title</code>, <code className="font-mono">company</code>,{" "}
               <code className="font-mono">notes</code>, <code className="font-mono">source</code>. Up to 10 at once as an
               array. Jobs wait in the app until you approve them; nothing is tailored (or billed) before that. Poll{" "}
-              <code className="font-mono">GET /api/jobs?ids=…</code> for progress.
+              <code className="font-mono">GET /api/jobs?ids=…</code> for progress, or{" "}
+              <code className="font-mono">GET /api/jobs?acted=1</code> for every employer you&apos;ve already dealt with.
             </p>
           </div>
         </div>

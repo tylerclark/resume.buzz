@@ -95,7 +95,9 @@ curl -X POST https://resume.buzz/api/jobs \
 
 - **Body**: `url` and/or `description` (pasted posting text, 200+ chars), plus optional `title`, `company`, `notes`, `comp`, `priority`, `source` (a label shown in the app), `prompt`. Unknown fields are ignored. Send an array (or `{"jobs": […]}`) for up to 10 at once.
 - **Dedupe**: a URL you already have (ignoring `utm_*` and similar tracking params) returns the existing job with `"duplicate": true`.
+- **Company conflicts**: every response also carries `"companyConflict": true|false` and a `conflicts` list (`id`, `title`, `company`, `status`, `link`) of your jobs at the same employer (by company name, or by the posting's hostname for non-aggregator sites) with any status other than `not_applied`. The job is still created, since another role at the same company may be fine; an agent should check the flag and decide.
 - **Status**: `GET /api/jobs?ids=a,b` with the same token. `stage` stays `pending` until you approve the job in the app, then goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
+- **List**: `GET /api/jobs?acted=1` (or `?status=applied,rejected,withdrawn,interviewing,offer,already_applied`, plus `q`, `sort`, `dir`, `offset`, `limit`) pages through your jobs. Each row includes `company`, `status` and `host` (the posting's hostname, lowercased, without `www.`), so an agent can skip employers you've already dealt with before pitching a role.
 - **Limits**: 50 API jobs per rolling 24 hours per user. Tokens only work on `/api/jobs`.
 
 In the app, submitted jobs sort to the top of Recent until opened and carry an **API** badge. Opening one shows who sent it, its notes, and **Tailor resume** / **Not interested**; once tailored, the same card offers **No longer interested** / **Mark applied**.

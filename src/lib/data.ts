@@ -5,10 +5,15 @@ import { baseResume, job, type Job } from "@/db/schema";
 import { userFromHeaders } from "./auth";
 import {
   canonicalJobUrl,
+  companyFromUrl,
+  companyKey,
   DEFAULT_COVER_STARTERS,
   DEFAULT_SORT,
   type Fact,
+  isSharedJobHost,
+  jobHost,
   type JobSort,
+  type JobStatus,
   type Resume,
   type SortDir,
   STAGE_TIMEOUT_MESSAGE,
@@ -157,7 +162,7 @@ export async function listJobs(userId: string, limit = 12) {
 // one page at a time.
 export async function searchJobs(
   userId: string,
-  opts: { q?: string; sort?: JobSort; dir?: SortDir; offset?: number; limit?: number } = {},
+  opts: { q?: string; status?: JobStatus[]; sort?: JobSort; dir?: SortDir; offset?: number; limit?: number } = {},
 ) {
   const q = (opts.q ?? "").trim();
   const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
@@ -170,6 +175,7 @@ export async function searchJobs(
       and(
         eq(job.userId, userId),
         pattern ? or(ilike(job.title, pattern), ilike(job.company, pattern), ilike(job.url, pattern)) : undefined,
+        opts.status?.length ? inArray(job.status, opts.status) : undefined,
       ),
     )
     .orderBy(...jobOrder(opts.sort ?? DEFAULT_SORT.key, opts.dir ?? DEFAULT_SORT.dir))
@@ -199,6 +205,26 @@ export async function findJobIdByUrl(userId: string, canonical: string) {
     .where(and(eq(job.userId, userId), ne(job.url, "")))
     .orderBy(desc(job.createdAt));
   return rows.find((r) => canonicalJobUrl(r.url) === canonical)?.id ?? null;
+}
+
+// For warning API clients off employers the user has already dealt with: the user's jobs at the same
+// company (by loose name match, falling back to the company a job-board URL implies) or on the same
+// employer-owned site, with any status other than "not applied". Hosts shared by many employers
+// (LinkedIn, jobs.ashbyhq.com…) never count as an employer site.
+export async function findActedJobsByCompany(userId: string, company: string, url: string) {
+  const key = companyKey(company || companyFromUrl(url));
+  const host = jobHost(url);
+  const hostKey = host && !isSharedJobHost(host) ? host : "";
+  if (!key && !hostKey) return [];
+  const rows = await db
+    .select({ id: job.id, title: job.title, company: job.company, url: job.url, status: job.status })
+    .from(job)
+    .where(and(eq(job.userId, userId), ne(job.status, "not_applied")))
+    .orderBy(desc(job.createdAt));
+  return rows.filter(
+    (r) =>
+      (key && companyKey(r.company || companyFromUrl(r.url)) === key) || (hostKey && jobHost(r.url) === hostKey),
+  );
 }
 
 // API submissions in the last 24h, for the daily cap.
