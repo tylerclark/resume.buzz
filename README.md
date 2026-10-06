@@ -51,7 +51,7 @@ Then you can:
 - **See every change** as a three-way word-level diff (base → AI → you) and edit any line. Your edits are stored beside the AI text, so the diff always shows what you changed.
 - **Fill gaps honestly.** Missing keywords are clickable. Describe where you actually used the skill, it is saved to your profile as confirmed experience, and the job is re-tailored with it. Never claims what you have not confirmed.
 - **Write a cover letter** in your own voice from the tailored resume, then edit it as plain text.
-- **Track applications.** Not applied → Applied → Interviewing → Offer → Rejected, with dates.
+- **Track applications.** Not applied → Applied → Interviewing → Offer → Rejected, with dates. **Already applied** covers postings that bounce you because an earlier application is still on file.
 - **Export** a real PDF named `<Name> - Resume for <Company>`: styled, single-column, selectable text an ATS can read, with clickable email and links.
 - **Import** your base resume from PDF or DOCX, or edit it in a structured editor that can reorder sections and entries.
 - **Run several jobs at once.** Each job is a tab. The pipeline runs on the server after the request returns, so you can switch tabs, reload, or close the browser while it works. Failed jobs retry from the step that broke.

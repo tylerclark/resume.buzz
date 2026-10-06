@@ -108,6 +108,8 @@ export const JOB_STATUSES = {
   applied: { label: "Applied", cls: "bg-brand-tint text-brand border-brand-line", closed: false },
   interviewing: { label: "Interviewing", cls: "bg-warn-bg text-warn-ink border-warn-line", closed: false },
   offer: { label: "Offer", cls: "bg-ok-bg text-ok-ink border-ok-line", closed: false },
+  // Tried to apply, but the employer blocked it because an earlier application is still on file.
+  already_applied: { label: "Already applied", cls: "bg-surface text-subtle border-line-2", closed: true },
   rejected: { label: "Rejected", cls: "bg-bad-bg text-bad border-bad-line", closed: true },
   withdrawn: { label: "No longer interested", cls: "bg-surface text-faint border-line-2", closed: true },
 } as const;
@@ -116,7 +118,7 @@ export const isJobStatus = (s: unknown): s is JobStatus => typeof s === "string"
 
 // How the Recent list can be ordered. `dir` is the direction that makes sense by default for each key;
 // the user can flip it. "status" is the working order: jobs still to apply to first, applied further
-// down, rejected below that, and no-longer-interested at the very bottom.
+// down, then already-applied, rejected, and no-longer-interested at the very bottom.
 export const JOB_SORTS = {
   status: { label: "Status", dir: "asc" },
   score: { label: "Score", dir: "desc" },

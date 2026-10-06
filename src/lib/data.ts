@@ -126,8 +126,8 @@ const summaryColumns = {
 // "status") fall back to newest first, with the id as a final tiebreak so pagination is stable.
 function jobOrder(sort: JobSort, dir: SortDir) {
   const key = {
-    // To-do (not applied, or in conversation) → applied → rejected → no longer interested.
-    status: sql`case ${job.status} when 'applied' then 1 when 'rejected' then 2 when 'withdrawn' then 3 else 0 end`,
+    // To-do (not applied, or in conversation) → applied → already applied → rejected → no longer interested.
+    status: sql`case ${job.status} when 'applied' then 1 when 'already_applied' then 2 when 'rejected' then 3 when 'withdrawn' then 4 else 0 end`,
     score: sql`coalesce(${job.tailoredScore}, ${job.score})`,
     applied: job.appliedAt,
     created: job.createdAt,
