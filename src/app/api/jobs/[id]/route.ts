@@ -1,6 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { job } from "@/db/schema";
+import { job, jobEvent } from "@/db/schema";
 import { deleteJob, getJob, userFromRequest } from "@/lib/data";
 import { isJobStatus, StoredTailoredSchema } from "@/lib/types";
 
@@ -53,7 +53,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/jobs/[id]"
   if (status === undefined && seen !== true) return Response.json({ error: "Nothing to update" }, { status: 400 });
 
   const now = new Date();
-  const [updated] = await db
+  const mine = and(eq(job.id, id), eq(job.userId, user.id));
+  const update = db
     .update(job)
     .set({
       seenAt: sql`coalesce(${job.seenAt}, now())`,
@@ -68,8 +69,29 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/jobs/[id]"
               : undefined,
       }),
     })
-    .where(and(eq(job.id, id), eq(job.userId, user.id)))
+    .where(mine)
     .returning({ status: job.status, statusAt: job.statusAt, appliedAt: job.appliedAt, seenAt: job.seenAt });
+  // Status changes are logged for reports, in the same transaction and ahead of the update so the old
+  // status can be compared (picking the current one again isn't a change). Going back to "not applied" is
+  // an undo, so it clears the job's history instead.
+  const log =
+    status === undefined
+      ? null
+      : status === "not_applied"
+        ? db.delete(jobEvent).where(and(eq(jobEvent.jobId, id), eq(jobEvent.userId, user.id)))
+        : db.insert(jobEvent).select(
+            db
+              .select({
+                id: sql`${crypto.randomUUID()}::text`.as("id"),
+                jobId: job.id,
+                userId: job.userId,
+                status: sql`${status}::text`.as("status"),
+                at: sql`${now.toISOString()}::timestamp`.as("at"),
+              })
+              .from(job)
+              .where(and(mine, ne(job.status, status))),
+          );
+  const [updated] = log ? (await db.batch([log, update]))[1] : await update;
   if (!updated) return Response.json({ error: "Not found" }, { status: 404 });
   return Response.json(updated);
 }

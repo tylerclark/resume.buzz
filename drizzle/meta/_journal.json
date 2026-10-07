@@ -64,6 +64,13 @@
       "when": 1790873658843,
       "tag": "0008_nostalgic_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791389256535,
+      "tag": "0009_spicy_black_crow",
+      "breakpoints": true
     }
   ]
 }

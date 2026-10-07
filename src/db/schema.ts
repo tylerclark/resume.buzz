@@ -135,6 +135,26 @@ export const job = pgTable(
 
 export type Job = typeof job.$inferSelect;
 
+// Every application status change, so reports can tell how long each step took (applied → rejected in
+// 10 days…). Rows only exist from when this was added; older jobs fall back to job.appliedAt / statusAt.
+export const jobEvent = pgTable(
+  "job_event",
+  {
+    id: text("id").primaryKey(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => job.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: text("status").$type<JobStatus>().notNull(),
+    at: timestamp("at").notNull().defaultNow(),
+  },
+  (t) => [index("job_event_user_at_idx").on(t.userId, t.at)],
+);
+
+export type JobEvent = typeof jobEvent.$inferSelect;
+
 // Personal API tokens for submitting jobs from scripts and agents. Only the SHA-256 of the token is
 // stored; the token itself is shown once, at creation.
 export const apiToken = pgTable(

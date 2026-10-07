@@ -340,6 +340,17 @@ function UserMenu({ user, demo }: { user: { name: string; email: string }; demo:
                 />
               </span>
             </button>
+            <Link
+              role="menuitem"
+              href="/reports"
+              onClick={(e) => {
+                if (!confirmLeave()) return e.preventDefault();
+                setOpen(false);
+              }}
+              className="block text-left hover:bg-canvas rounded-md px-2.5 py-2 text-[13px] font-semibold text-ink hover:text-ink hover:no-underline"
+            >
+              Reports
+            </Link>
             <button
               role="menuitem"
               onClick={() => {
