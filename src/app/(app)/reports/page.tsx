@@ -57,6 +57,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
                 { label: "Heard back", n: heardBack },
                 { label: "Interviewing", n: r.interviewed },
                 { label: "Offer", n: r.offers },
+                { label: "Rejected", n: r.rejected, tone: "bad" },
               ]}
             />
             <p className="text-[12px] text-subtle mt-3">
@@ -133,7 +134,7 @@ function Stat({ label, value, note }: { label: string; value: number; note?: str
   );
 }
 
-function Funnel({ total, steps }: { total: number; steps: { label: string; n: number }[] }) {
+function Funnel({ total, steps }: { total: number; steps: { label: string; n: number; tone?: "bad" }[] }) {
   return (
     <div className="flex flex-col gap-2">
       {steps.map((s) => (
@@ -141,7 +142,7 @@ function Funnel({ total, steps }: { total: number; steps: { label: string; n: nu
           <span className="text-[12.5px] font-semibold text-muted">{s.label}</span>
           <span className="h-5 bg-well rounded-[4px] overflow-hidden">
             <span
-              className="block h-full bg-brand rounded-[4px]"
+              className={`block h-full rounded-[4px] ${s.tone === "bad" ? "bg-bad" : "bg-brand"}`}
               style={{ width: total ? `${Math.max((s.n / total) * 100, s.n ? 1.5 : 0)}%` : 0 }}
             />
           </span>
