@@ -254,6 +254,22 @@ export function companyFromUrl(url: string): string {
   return name ? pretty(name) : "";
 }
 
+// Agents often send a one-line summary as `notes` instead of separate fields:
+//   "Temporal — Staff Software Engineer, AI Foundations — United States (Remote) — $169.6k–$278.25k + equity — why it fits"
+// Pull the company, title and pay out of the first line so the job shows up properly before it's extracted.
+// Only the first two segments are positional (company, then title); pay is whichever segment names money.
+export function parseJobLine(notes: string): { company: string; title: string; pay: string } {
+  const none = { company: "", title: "", pay: "" };
+  const line = (notes ?? "").split("\n").find((l) => l.trim()) ?? "";
+  const segs = line.split(/\s+[—–|]\s+|\s+-\s+/).map((s) => s.trim()).filter(Boolean);
+  if (segs.length < 2) return none;
+  const money = /(?:[$€£]\s?\d|\d[\d,.]*\s?k\b|\b\d{2,3},\d{3}\b)/i;
+  const [company, title] = segs;
+  if (company.length > 60 || title.length > 200 || money.test(company) || money.test(title)) return none;
+  const pay = segs.slice(2).find((s) => money.test(s) && s.length <= 120) ?? "";
+  return { company, title, pay };
+}
+
 export const MIN_DESCRIPTION = 200;
 export const MAX_DESCRIPTION = 60_000;
 

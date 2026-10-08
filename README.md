@@ -93,7 +93,7 @@ curl -X POST https://resume.buzz/api/jobs \
 # → 202 {"id": "…", "stage": "pending", "link": "https://resume.buzz/j/…", "duplicate": false}
 ```
 
-- **Body**: `url` and/or `description` (pasted posting text, 200+ chars), plus optional `title`, `company`, `notes`, `comp`, `priority`, `source` (a label shown in the app), `prompt`. Unknown fields are ignored. Send an array (or `{"jobs": […]}`) for up to 10 at once.
+- **Body**: `url` and/or `description` (pasted posting text, 200+ chars), plus optional `title`, `company`, `comp` (pay band, shown in the list), `notes`, `priority`, `source` (a label shown in the app), `prompt`. If `title`/`company`/`comp` are missing, a first `notes` line shaped like `Company — Title — Location — $pay — …` is parsed for them. Unknown fields are ignored. Send an array (or `{"jobs": […]}`) for up to 10 at once.
 - **Dedupe**: a URL you already have (ignoring `utm_*` and similar tracking params) returns the existing job with `"duplicate": true`.
 - **Company conflicts**: every response also carries `"companyConflict": true|false` and a `conflicts` list (`id`, `title`, `company`, `status`, `link`) of your jobs at the same employer (by company name, or by the posting's hostname for non-aggregator sites) with any status other than `not_applied`. The job is still created, since another role at the same company may be fine; an agent should check the flag and decide.
 - **Status**: `GET /api/jobs?ids=a,b` with the same token. `stage` stays `pending` until you approve the job in the app, then goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).

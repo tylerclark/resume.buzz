@@ -127,7 +127,7 @@ export async function startJob(
   userId: string,
   source: { url: string; description?: string },
   prompt: string,
-  meta: { source?: string; notes?: string; title?: string; company?: string; hold?: boolean } = {},
+  meta: { source?: string; notes?: string; title?: string; company?: string; pay?: string; hold?: boolean } = {},
 ) {
   const id = crypto.randomUUID();
   const raw = source.description?.trim() ?? "";
@@ -138,6 +138,7 @@ export async function startJob(
     pasted: !!raw,
     title: meta.title ?? "",
     company: meta.company ?? "",
+    pay: meta.pay ?? "",
     raw,
     prompt,
     stage: meta.hold ? "pending" : "queued",

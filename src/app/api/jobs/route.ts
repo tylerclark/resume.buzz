@@ -23,6 +23,7 @@ import {
   type JobStatus,
   MAX_DESCRIPTION,
   MIN_DESCRIPTION,
+  parseJobLine,
   parseJobUrl,
 } from "@/lib/types";
 
@@ -170,14 +171,18 @@ export async function POST(request: Request) {
     }
     remaining--;
 
+    // Fields the client didn't send separately may still be in a "Company — Title — … — $pay" notes line.
+    const guessed = parseJobLine(j.notes ?? "");
+    const pay = j.comp || guessed.pay;
     const notes = [j.priority && `Priority: ${j.priority}`, j.comp && `Comp: ${j.comp}`, j.notes]
       .filter(Boolean)
       .join("\n");
     const id = await startJob(user.id, { url, description: j.description }, j.prompt || DEFAULT_PROMPT, {
       source: j.source || "api",
       notes,
-      title: j.title,
-      company: j.company,
+      title: j.title || guessed.title,
+      company: j.company || guessed.company,
+      pay,
       hold: true,
     });
     if (url) seen.set(url, id);
