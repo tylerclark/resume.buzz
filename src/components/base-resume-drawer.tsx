@@ -28,32 +28,35 @@ function move<T>(list: T[], from: number, to: number) {
   list.splice(to, 0, item);
 }
 
-function MoveButtons({
-  noun,
-  index,
-  count,
-  onMove,
-}: {
-  noun: string;
-  index: number;
-  count: number;
-  onMove: (to: number) => void;
-}) {
+// An entry's ↑ at the top of a section hops it to the end of the previous section (and ↓ at the
+// bottom to the start of the next one), so entries can be moved across sections with the same arrows.
+function moveEntry(d: Resume, si: number, ei: number, dir: -1 | 1) {
+  const entries = d.sections[si].entries;
+  const to = ei + dir;
+  if (to >= 0 && to < entries.length) return move(entries, ei, to);
+  const target = d.sections[si + dir];
+  if (!target) return;
+  const [entry] = entries.splice(ei, 1);
+  if (dir < 0) target.entries.push(entry);
+  else target.entries.unshift(entry);
+}
+
+function MoveButtons({ up, down }: { up?: [label: string, fn: () => void]; down?: [label: string, fn: () => void] }) {
   return (
     <div className="flex gap-1">
       {(
         [
-          ["↑", `Move ${noun} up`, index - 1],
-          ["↓", `Move ${noun} down`, index + 1],
+          ["↑", up],
+          ["↓", down],
         ] as const
-      ).map(([glyph, label, to]) => (
+      ).map(([glyph, action]) => (
         <button
           key={glyph}
           type="button"
-          title={label}
-          aria-label={label}
-          disabled={to < 0 || to >= count}
-          onClick={() => onMove(to)}
+          title={action?.[0]}
+          aria-label={action?.[0] ?? `Move ${glyph === "↑" ? "up" : "down"}`}
+          disabled={!action}
+          onClick={action?.[1]}
           className="w-7 h-7 grid place-items-center bg-surface border border-line-2 rounded-md text-[13px] text-subtle cursor-pointer hover:bg-canvas hover:text-ink disabled:opacity-35 disabled:cursor-default"
         >
           {glyph}
@@ -209,6 +212,17 @@ export function BaseResumeDrawer({
 
   const newEntry = (): Entry => ({ role: "", org: "", dates: "", bullets: [] });
 
+  // Arrow action for an entry, or undefined when there's nowhere to go in that direction.
+  const entryMove = (si: number, ei: number, dir: -1 | 1): [string, () => void] | undefined => {
+    const inSection = dir < 0 ? ei > 0 : ei < r.sections[si].entries.length - 1;
+    const neighbour = r.sections[si + dir];
+    if (!inSection && !neighbour) return undefined;
+    const label = inSection
+      ? `Move entry ${dir < 0 ? "up" : "down"}`
+      : `Move entry into ${neighbour.title.trim() || (dir < 0 ? "previous section" : "next section")}`;
+    return [label, () => update((d) => moveEntry(d, si, ei, dir))];
+  };
+
   return (
     <>
       <div onClick={close} className="fixed inset-0 z-20 bg-scrim" />
@@ -303,10 +317,12 @@ export function BaseResumeDrawer({
                   className="font-extrabold text-[12px] tracking-[.08em] uppercase border-0 py-1 text-ink bg-transparent outline-none flex-1"
                 />
                 <MoveButtons
-                  noun="section"
-                  index={si}
-                  count={r.sections.length}
-                  onMove={(to) => update((d) => move(d.sections, si, to))}
+                  up={si > 0 ? ["Move section up", () => update((d) => move(d.sections, si, si - 1))] : undefined}
+                  down={
+                    si < r.sections.length - 1
+                      ? ["Move section down", () => update((d) => move(d.sections, si, si + 1))]
+                      : undefined
+                  }
                 />
                 <button
                   onClick={() => update((d) => void d.sections.splice(si, 1))}
@@ -346,12 +362,7 @@ export function BaseResumeDrawer({
                       />
                     </Field>
                     <div className="pb-0.5">
-                      <MoveButtons
-                        noun="entry"
-                        index={ei}
-                        count={s.entries.length}
-                        onMove={(to) => update((d) => move(d.sections[si].entries, ei, to))}
-                      />
+                      <MoveButtons up={entryMove(si, ei, -1)} down={entryMove(si, ei, 1)} />
                     </div>
                     <button
                       onClick={() => update((d) => void d.sections[si].entries.splice(ei, 1))}
