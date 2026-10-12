@@ -182,6 +182,9 @@ export function ApiTokensDialog({ onClose }: { onClose: () => void }) {
               array. Jobs wait in the app until you approve them; nothing is tailored (or billed) before that. Poll{" "}
               <code className="font-mono">GET /api/jobs?ids=…</code> for progress, or{" "}
               <code className="font-mono">GET /api/jobs?acted=1</code> for every employer you&apos;ve already dealt with.
+              For an agent that applies for you, <code className="font-mono">POST /api/jobs/tailor</code> crawls and
+              tailors in one call (billed, no approval), <code className="font-mono">GET /api/jobs/…/pdf</code> returns
+              the PDF, and <code className="font-mono">PATCH /api/jobs/…</code> marks it applied. Details in the README.
             </p>
           </div>
         </div>

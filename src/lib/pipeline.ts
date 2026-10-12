@@ -1,11 +1,11 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, lt, or } from "drizzle-orm";
 import { after } from "next/server";
 import { db } from "@/db";
 import { job, type Job } from "@/db/schema";
 import { extractJob, scoreJob, scrapePosting, tailorResume, writeCoverLetter } from "./ai";
 import { getBaseResume, getFacts } from "./data";
-import { DEFAULT_PROMPT, finalResume, resumeHash, type JobStage } from "./types";
+import { DEFAULT_PROMPT, finalResume, type JobStage, resumeHash, STAGE_TIMEOUT_MS } from "./types";
 
 // The tailoring pipeline runs on the server *after* the request that kicked it off has returned, so the
 // user can open other tabs, refresh, or close the browser while it works. Every stage transition is
@@ -38,7 +38,8 @@ async function fail(id: string, userId: string, err: unknown) {
 }
 
 // Runs the pipeline from `from` onward for an existing row. Each step persists its own results so a
-// retry can resume, and the tab shows the title as soon as it's known.
+// retry can resume, and the tab shows the title as soon as it's known. Never throws: a failure is
+// written to the row (stage "failed") and the promise still resolves.
 async function run(id: string, userId: string, from: JobStage) {
   const order: JobStage[] = ["scraping", "extracting", "scoring", "tailoring", "rescoring"];
   const startAt = Math.max(0, order.indexOf(from));
@@ -119,6 +120,42 @@ async function run(id: string, userId: string, from: JobStage) {
   }
 }
 
+// Run the pipeline for a waiting ("pending") or failed row and wait for it: the API's tailor-now endpoint
+// holds the request open while it runs. The claim is conditional on the stage so two concurrent calls
+// start it once; the loser gets `false` and should poll the row instead. A run that stopped reporting
+// (killed function) still shows its last stage in the DB; the same timeout `settleStale` uses lets it be reclaimed.
+export async function runJobNow(row: Job) {
+  const from = resumeStage(row);
+  const rows = await db
+    .update(job)
+    .set({ stage: "queued", error: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(job.id, row.id),
+        eq(job.userId, row.userId),
+        or(inArray(job.stage, ["pending", "failed"]), lt(job.updatedAt, new Date(Date.now() - STAGE_TIMEOUT_MS))),
+      ),
+    )
+    .returning({ id: job.id });
+  if (rows.length === 0) return false;
+  await run(row.id, row.userId, from);
+  return true;
+}
+
+// Where to pick a row up: the first step that hasn't finished. A pasted job has `raw` from the start;
+// `title` only lands once extraction succeeds.
+function resumeStage(row: Job): JobStage {
+  return !row.raw
+    ? "scraping"
+    : row.pasted && !row.title
+      ? "extracting"
+      : row.tailored
+        ? "tailoring"
+        : !row.scoreNote
+          ? "scoring"
+          : "tailoring";
+}
+
 // Create the row and schedule the full pipeline. Returns immediately with the new id. Either a URL to
 // scrape or a pasted description (with an optional URL kept only as the link back to the posting).
 // API submissions pass `meta`: where it came from, notes, and title/company to show until extraction.
@@ -170,16 +207,7 @@ export async function retailorJob(row: Job, prompt: string) {
 
 // Resume a failed job from the last step that didn't finish.
 export async function retryJob(row: Job) {
-  // A pasted job has `raw` from the start; `title` only lands once extraction succeeds.
-  const from: JobStage = !row.raw
-    ? "scraping"
-    : row.pasted && !row.title
-      ? "extracting"
-    : row.tailored
-        ? "tailoring"
-        : !row.scoreNote
-          ? "scoring"
-          : "tailoring";
+  const from = resumeStage(row);
   await advance(row.id, row.userId, "queued", { error: null });
   after(() => run(row.id, row.userId, from));
 }

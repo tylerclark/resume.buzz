@@ -273,6 +273,47 @@ export function parseJobLine(notes: string): { company: string; title: string; p
 export const MIN_DESCRIPTION = 200;
 export const MAX_DESCRIPTION = 60_000;
 
+// One job as an API client sends it (POST /api/jobs and POST /api/jobs/tailor). Unknown fields are
+// ignored so clients can send whatever shape they already have.
+const optText = (max: number) => z.string().trim().max(max).optional();
+export const ApiJobInput = z
+  .object({
+    url: optText(2000),
+    description: optText(MAX_DESCRIPTION),
+    title: optText(300),
+    company: optText(200),
+    notes: optText(4000),
+    // Folded into notes; common in scraped/agent job data.
+    comp: optText(200),
+    priority: optText(40),
+    source: z
+      .string()
+      .trim()
+      .regex(/^[\w .-]{1,40}$/, "source: letters, numbers, spaces, . _ - (max 40)")
+      .optional(),
+    prompt: optText(4000),
+  })
+  .superRefine((j, ctx) => {
+    if (!j.url && !j.description) ctx.addIssue({ code: "custom", message: "Send a url, a description, or both." });
+    if (j.url && !parseJobUrl(j.url)) ctx.addIssue({ code: "custom", path: ["url"], message: "Not a valid http(s) URL." });
+    if (j.description && j.description.length < MIN_DESCRIPTION)
+      ctx.addIssue({ code: "custom", path: ["description"], message: `At least ${MIN_DESCRIPTION} characters.` });
+  });
+export type ApiJob = z.infer<typeof ApiJobInput>;
+
+// What to store for an API-submitted job before it's extracted. Fields the client didn't send separately
+// may still be in a "Company — Title — … — $pay" notes line.
+export function apiJobMeta(j: ApiJob) {
+  const guessed = parseJobLine(j.notes ?? "");
+  return {
+    source: j.source || "api",
+    notes: [j.priority && `Priority: ${j.priority}`, j.comp && `Comp: ${j.comp}`, j.notes].filter(Boolean).join("\n"),
+    title: j.title || guessed.title,
+    company: j.company || guessed.company,
+    pay: j.comp || guessed.pay,
+  };
+}
+
 export type CoverStage = "idle" | "writing" | "failed";
 
 // A pipeline that hasn't advanced in this long is considered dead (the function was killed or crashed

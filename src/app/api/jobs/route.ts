@@ -1,5 +1,4 @@
-import { z } from "zod";
-import { userFromToken } from "@/lib/api-tokens";
+import { userFromSessionOrToken } from "@/lib/api-tokens";
 import {
   countRecentApiJobs,
   findActedJobsByCompany,
@@ -7,10 +6,11 @@ import {
   getBaseResume,
   listJobsByIds,
   searchJobs,
-  userFromRequest,
 } from "@/lib/data";
 import { startJob } from "@/lib/pipeline";
 import {
+  ApiJobInput,
+  apiJobMeta,
   canonicalJobUrl,
   DEFAULT_PROMPT,
   DEFAULT_SORT,
@@ -21,16 +21,11 @@ import {
   JOB_STATUSES,
   jobHost,
   type JobStatus,
-  MAX_DESCRIPTION,
-  MIN_DESCRIPTION,
-  parseJobLine,
   parseJobUrl,
 } from "@/lib/types";
 
 // Both methods accept a session cookie or `Authorization: Bearer rb_…` (a personal API token).
-async function caller(request: Request) {
-  return (await userFromRequest(request)) ?? (await userFromToken(request));
-}
+const caller = userFromSessionOrToken;
 
 // Every status except "not applied": the user has acted on the job one way or another.
 const ACTED: JobStatus[] = (Object.keys(JOB_STATUSES) as JobStatus[]).filter((s) => s !== "not_applied");
@@ -85,33 +80,6 @@ function withHost<T extends { url: string }>(j: T) {
 const DAILY_LIMIT = 50;
 const MAX_BATCH = 10;
 
-const opt = (max: number) => z.string().trim().max(max).optional();
-
-// Unknown fields are ignored so clients can send whatever shape they already have.
-const JobInput = z
-  .object({
-    url: opt(2000),
-    description: opt(MAX_DESCRIPTION),
-    title: opt(300),
-    company: opt(200),
-    notes: opt(4000),
-    // Folded into notes; common in scraped/agent job data.
-    comp: opt(200),
-    priority: opt(40),
-    source: z
-      .string()
-      .trim()
-      .regex(/^[\w .-]{1,40}$/, "source: letters, numbers, spaces, . _ - (max 40)")
-      .optional(),
-    prompt: opt(4000),
-  })
-  .superRefine((j, ctx) => {
-    if (!j.url && !j.description) ctx.addIssue({ code: "custom", message: "Send a url, a description, or both." });
-    if (j.url && !parseJobUrl(j.url)) ctx.addIssue({ code: "custom", path: ["url"], message: "Not a valid http(s) URL." });
-    if (j.description && j.description.length < MIN_DESCRIPTION)
-      ctx.addIssue({ code: "custom", path: ["description"], message: `At least ${MIN_DESCRIPTION} characters.` });
-  });
-
 // Submit one job ({…}), or several ([…] or { jobs: […] }). Each shows up in the app with an "API" badge and
 // waits there ("pending") until the user approves it; only then is it tailored, so a script can't spend
 // model credits on its own. Re-submitting a URL you already have returns the existing job. A job at a
@@ -131,7 +99,7 @@ export async function POST(request: Request) {
     return Response.json({ error: `At most ${MAX_BATCH} jobs per request.` }, { status: 400 });
   }
 
-  const parsed = items.map((it) => JobInput.safeParse(it));
+  const parsed = items.map((it) => ApiJobInput.safeParse(it));
   const invalid = parsed.flatMap((p, index) =>
     p.success ? [] : [{ index, errors: p.error.issues.map((i) => i.message) }],
   );
@@ -171,18 +139,8 @@ export async function POST(request: Request) {
     }
     remaining--;
 
-    // Fields the client didn't send separately may still be in a "Company — Title — … — $pay" notes line.
-    const guessed = parseJobLine(j.notes ?? "");
-    const pay = j.comp || guessed.pay;
-    const notes = [j.priority && `Priority: ${j.priority}`, j.comp && `Comp: ${j.comp}`, j.notes]
-      .filter(Boolean)
-      .join("\n");
     const id = await startJob(user.id, { url, description: j.description }, j.prompt || DEFAULT_PROMPT, {
-      source: j.source || "api",
-      notes,
-      title: j.title || guessed.title,
-      company: j.company || guessed.company,
-      pay,
+      ...apiJobMeta(j),
       hold: true,
     });
     if (url) seen.set(url, id);

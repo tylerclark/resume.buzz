@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { apiToken, user } from "@/db/schema";
+import { userFromRequest } from "./data";
 
 // Personal API tokens: `rb_` + 32 random bytes. They carry enough entropy that a plain SHA-256 is the
 // right storage (no salt/slow hash needed), and lookups are by hash so there's no string comparison to time.
@@ -51,7 +52,8 @@ export async function revokeApiToken(userId: string, id: string) {
 }
 
 // The user behind `Authorization: Bearer rb_…`, or null. Only the API routes that opt in call this, so
-// a token can submit jobs and read their status but can't do anything else a session can.
+// a token can submit and tailor jobs, read their status, download their PDFs and set their application
+// status, but can't do anything else a session can (edit the resume, delete jobs, manage tokens…).
 export async function userFromToken(request: Request) {
   const m = request.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i);
   if (!m || !m[1].startsWith(PREFIX)) return null;
@@ -66,4 +68,9 @@ export async function userFromToken(request: Request) {
     await db.update(apiToken).set({ lastUsedAt: new Date() }).where(eq(apiToken.id, row.tokenId));
   }
   return { id: row.id, email: row.email };
+}
+
+// For routes that take either: the session cookie if there is one, else a personal API token.
+export async function userFromSessionOrToken(request: Request) {
+  return (await userFromRequest(request)) ?? (await userFromToken(request));
 }

@@ -96,9 +96,32 @@ curl -X POST https://resume.buzz/api/jobs \
 - **Body**: `url` and/or `description` (pasted posting text, 200+ chars), plus optional `title`, `company`, `comp` (pay band, shown in the list), `notes`, `priority`, `source` (a label shown in the app), `prompt`. If `title`/`company`/`comp` are missing, a first `notes` line shaped like `Company — Title — Location — $pay — …` is parsed for them. Unknown fields are ignored. Send an array (or `{"jobs": […]}`) for up to 10 at once.
 - **Dedupe**: a URL you already have (ignoring `utm_*` and similar tracking params) returns the existing job with `"duplicate": true`.
 - **Company conflicts**: every response also carries `"companyConflict": true|false` and a `conflicts` list (`id`, `title`, `company`, `status`, `link`) of your jobs at the same employer (by company name, or by the posting's hostname for non-aggregator sites) with any status other than `not_applied`. The job is still created, since another role at the same company may be fine; an agent should check the flag and decide.
-- **Status**: `GET /api/jobs?ids=a,b` with the same token. `stage` stays `pending` until you approve the job in the app, then goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
+- **Status**: `GET /api/jobs?ids=a,b` (or `GET /api/jobs/{id}` for one job in full) with the same token. `stage` stays `pending` until you approve the job in the app, then goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
 - **List**: `GET /api/jobs?acted=1` (or `?status=applied,rejected,withdrawn,interviewing,offer,already_applied`, plus `q`, `sort`, `dir`, `offset`, `limit`) pages through your jobs. Each row includes `company`, `status` and `host` (the posting's hostname, lowercased, without `www.`), so an agent can skip employers you've already dealt with before pitching a role.
-- **Limits**: 50 API jobs per rolling 24 hours per user. Tokens only work on `/api/jobs`.
+- **Mark applied**: `PATCH /api/jobs/{id}` with `{"status": "applied"}` (any status above works) once the agent has sent the application. The first `applied` records the applied date.
+- **Limits**: 50 API jobs per rolling 24 hours per user, across both submit endpoints. Tokens only work on `/api/jobs…`.
+
+### Tailor in one call
+
+For an agent that applies on your behalf, `POST /api/jobs/tailor` does everything at once: it creates the job, crawls the posting, extracts and scores it, tailors your resume, and answers only when that's finished (usually 1–3 minutes; keep the HTTP timeout at 5 minutes). This spends model credits without you approving anything, so only give that token to an agent you trust.
+
+```sh
+curl -X POST https://resume.buzz/api/jobs/tailor \
+  -H "Authorization: Bearer rb_…" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://jobs.example.com/123", "source": "my-agent", "skipIfConflict": true}'
+# → 201 {"id": "…", "stage": "done", "title": "…", "company": "…", "score": 61, "tailoredScore": 84,
+#        "pdf": "https://resume.buzz/api/jobs/…/pdf", "link": "https://resume.buzz/j/…", "companyConflict": false, …}
+curl -H "Authorization: Bearer rb_…" -o resume.pdf https://resume.buzz/api/jobs/…/pdf
+curl -X PATCH https://resume.buzz/api/jobs/… -H "Authorization: Bearer rb_…" \
+  -H "Content-Type: application/json" -d '{"status": "applied"}'
+```
+
+- Same body as `POST /api/jobs` (one job, not an array), plus `skipIfConflict: true` to get a `409` with the clashing jobs instead of tailoring a role at a company you've already dealt with.
+- Send `Accept: application/pdf` to get the PDF back directly instead of JSON; the job id is in the `X-Job-Id` header.
+- `GET /api/jobs/{id}/pdf` returns the tailored resume any time later (`?kind=cover` for the cover letter, once one exists).
+- A URL you already have returns that job (`"duplicate": true`) without tailoring again; if it was still waiting or had failed, it's tailored now.
+- `422` with `error` means the pipeline failed (page needs a login, no posting found…); fix the input or send `description` instead. `202` means it's still running after the wait: poll `GET /api/jobs/{id}` until `stage` is `done`, or just re-send the same request.
 
 In the app, submitted jobs sort to the top of Recent until opened and carry an **API** badge. Opening one shows who sent it, its notes, and **Tailor resume** / **Not interested**; once tailored, the same card offers **No longer interested** / **Mark applied**.
 

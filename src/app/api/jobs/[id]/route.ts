@@ -1,11 +1,14 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { job, jobEvent } from "@/db/schema";
+import { userFromSessionOrToken } from "@/lib/api-tokens";
 import { deleteJob, getJob, userFromRequest } from "@/lib/data";
 import { isJobStatus, StoredTailoredSchema } from "@/lib/types";
 
+// GET and PATCH also accept an API token (`Authorization: Bearer rb_…`), so an agent can read a job it
+// submitted and mark it applied. DELETE and PUT stay session-only.
 export async function GET(request: Request, ctx: RouteContext<"/api/jobs/[id]">) {
-  const user = await userFromRequest(request);
+  const user = await userFromSessionOrToken(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const row = await getJob(user.id, id);
@@ -44,11 +47,11 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/jobs/[id]">)
 // seeing it (e.g. "No longer interested" straight from the list). Picking "applied" (or later) the first
 // time records the applied date.
 export async function PATCH(request: Request, ctx: RouteContext<"/api/jobs/[id]">) {
-  const user = await userFromRequest(request);
+  const user = await userFromSessionOrToken(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const { status, seen } = (await request.json()) as { status?: unknown; seen?: unknown };
+  const { status, seen } = ((await request.json().catch(() => null)) ?? {}) as { status?: unknown; seen?: unknown };
   if (status !== undefined && !isJobStatus(status)) return Response.json({ error: "Invalid status" }, { status: 400 });
   if (status === undefined && seen !== true) return Response.json({ error: "Nothing to update" }, { status: 400 });
 

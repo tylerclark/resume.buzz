@@ -1,8 +1,10 @@
 import "server-only";
 import path from "node:path";
 import { Document, Font, Link, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
+import type { Job } from "@/db/schema";
+import { alignToBase } from "./align";
 import { linkify } from "./linkify";
-import type { Entry, Resume } from "./types";
+import { type Entry, finalResume, type Resume } from "./types";
 
 // Same faces as the on-screen document (see app/layout.tsx), embedded so the PDF looks the same everywhere.
 const font = (file: string) => path.join(process.cwd(), "src/assets/fonts", file);
@@ -173,4 +175,53 @@ export function renderResumePdf(resume: Resume, title: string) {
 
 export function renderCoverPdf(resume: Resume, paragraphs: string[], date: string, title: string) {
   return renderToBuffer(<CoverPdf resume={resume} paragraphs={paragraphs} date={date} title={title} />);
+}
+
+// The letter is dated in the reader's time zone, not the server's.
+function today(timeZone: string | null) {
+  const fmt = (tz?: string) =>
+    new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: tz });
+  try {
+    return fmt(timeZone ?? undefined);
+  } catch {
+    return fmt();
+  }
+}
+
+// The PDF for a job (its tailored resume, or its cover letter) or, with no job, the base resume, plus a
+// file name. Returns null for a cover letter that hasn't been written yet.
+export async function buildPdf(opts: {
+  base: Resume;
+  row: Job | null;
+  fallbackName: string;
+  kind: "resume" | "cover";
+  tz?: string | null;
+}) {
+  const { base, row, kind } = opts;
+  const cover = kind === "cover";
+  if (cover && !row?.coverLetter) return null;
+
+  const who = base.name.trim() || opts.fallbackName || "Resume";
+  const label = cover ? "Cover Letter" : "Resume";
+  const target = row ? row.company || row.title : "";
+  const name = (target ? `${who} - ${label} for ${target}` : `${who} - ${label}`).replace(/[\\/:*?"<>|]+/g, "-");
+
+  // Always follow the base resume's section/entry order, as the on-screen document does.
+  const resume = { ...base, name: who, ...(row?.tailored && finalResume(alignToBase(row.tailored, base))) };
+  const pdf =
+    cover && row?.coverLetter
+      ? await renderCoverPdf(resume, row.coverLetter, today(opts.tz ?? null), name)
+      : await renderResumePdf(resume, name);
+  return { pdf, name };
+}
+
+export function pdfResponse(pdf: Buffer, name: string, extra: Record<string, string> = {}) {
+  return new Response(new Uint8Array(pdf), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${name.replace(/[^\x20-\x7e]/g, "_")}.pdf"; filename*=UTF-8''${encodeURIComponent(name)}.pdf`,
+      "Cache-Control": "no-store",
+      ...extra,
+    },
+  });
 }
