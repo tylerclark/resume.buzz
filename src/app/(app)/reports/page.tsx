@@ -224,11 +224,20 @@ function DayBars({
       <div>
         <div className="grid gap-[2px] h-[56px] items-end border-b border-line" style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}>
           {days.map((d) => (
-            <div key={d.start.toISOString()} className="h-full flex items-end group" title={`${shortDate(d.start)}: ${d[k]}`}>
+            <div key={d.start.toISOString()} className="relative h-full flex items-end group">
               <div
                 className="w-full bg-brand rounded-t-[3px] group-hover:bg-brand-hover"
                 style={{ height: d[k] ? `${Math.max((d[k] / max) * 100, 6)}%` : 0 }}
               />
+              <div
+                role="tooltip"
+                className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-10 hidden group-hover:block whitespace-nowrap rounded-md border border-line bg-surface shadow-menu px-2 py-1 text-[11px] leading-tight"
+              >
+                <div className="text-subtle">{shortDate(d.start)}</div>
+                <div className="font-bold text-ink tabular-nums">
+                  {d[k]} {label.toLowerCase()}
+                </div>
+              </div>
             </div>
           ))}
         </div>
