@@ -186,6 +186,22 @@ function DurationRow({ d }: { d: Duration }) {
 }
 
 const shortDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const shortTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+// "just now", "4m ago", "3h ago", "2d ago", "5w ago", "3mo ago", "1y ago".
+function timeAgo(d: Date, now: Date) {
+  const s = Math.max(0, (now.getTime() - d.getTime()) / 1000);
+  if (s < 60) return "just now";
+  const m = s / 60;
+  if (m < 60) return `${Math.floor(m)}m ago`;
+  const h = m / 60;
+  if (h < 24) return `${Math.floor(h)}h ago`;
+  const days = h / 24;
+  if (days < 7) return `${Math.floor(days)}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
 
 function DayBars({
   label,
@@ -260,7 +276,12 @@ function ApplicationsTable({ rows }: { rows: JobTimeline[] }) {
                 <td className="px-3 py-2">
                   <StatusPill status={t.status} />
                 </td>
-                <td className="px-3 py-2 text-muted tabular-nums whitespace-nowrap">{shortDate(t.appliedAt!)}</td>
+                <td className="px-3 py-2 tabular-nums whitespace-nowrap" title={t.appliedAt!.toLocaleString("en-US")}>
+                  <span className="block text-muted">
+                    {shortDate(t.appliedAt!)} · {shortTime(t.appliedAt!)}
+                  </span>
+                  <span className="block text-[11.5px] text-subtle">{timeAgo(t.appliedAt!, now)}</span>
+                </td>
                 <td className="px-3 py-2 text-right tabular-nums text-muted">{days(t.addedAt, t.appliedAt)}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-muted">{days(t.appliedAt, t.interviewAt)}</td>
                 <td className="px-5 py-2 text-right tabular-nums whitespace-nowrap">
