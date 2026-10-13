@@ -12,7 +12,7 @@ export const isReportSource = (s: unknown): s is ReportSource => typeof s === "s
 const DAY = 86_400_000;
 // An application with no reply after this long is probably not getting one.
 export const GHOSTED_DAYS = 30;
-export const WEEKS = 12;
+export const DAYS = 30;
 
 // One job's path through the search: when each step happened, as far as we know.
 export type JobTimeline = {
@@ -45,7 +45,7 @@ export type Report = {
   skipped: number;
   alreadyApplied: number;
   durations: Duration[];
-  weeks: { start: Date; added: number; applied: number; rejected: number }[];
+  days: { start: Date; added: number; applied: number; rejected: number }[];
   timelines: JobTimeline[];
 };
 
@@ -131,20 +131,21 @@ export async function getReport(userId: string, source: ReportSource): Promise<R
     },
   ];
 
-  // Monday-start weeks, oldest first, ending with the current one.
-  const monday = new Date();
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  const weeks = Array.from({ length: WEEKS }, (_, i) => ({
-    start: new Date(monday.getTime() - (WEEKS - 1 - i) * 7 * DAY),
-    added: 0,
-    applied: 0,
-    rejected: 0,
-  }));
+  // Calendar days, oldest first, ending with today.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Array.from({ length: DAYS }, (_, i) => {
+    const start = new Date(today);
+    start.setDate(today.getDate() - (DAYS - 1 - i));
+    return { start, added: 0, applied: 0, rejected: 0 };
+  });
   const bump = (d: Date | null, key: "added" | "applied" | "rejected") => {
     if (!d) return;
-    const i = Math.floor((d.getTime() - weeks[0].start.getTime()) / (7 * DAY));
-    if (i >= 0 && i < WEEKS) weeks[i][key]++;
+    const day = new Date(d);
+    day.setHours(0, 0, 0, 0);
+    // Round so a DST hour shift can't land a day in the wrong bucket.
+    const i = Math.round((day.getTime() - days[0].start.getTime()) / DAY);
+    if (i >= 0 && i < DAYS) days[i][key]++;
   };
   for (const t of timelines) {
     bump(t.addedAt, "added");
@@ -164,7 +165,7 @@ export async function getReport(userId: string, source: ReportSource): Promise<R
     skipped: timelines.filter((t) => t.status === "withdrawn" && !t.appliedAt).length,
     alreadyApplied: timelines.filter((t) => t.status === "already_applied").length,
     durations,
-    weeks,
+    days,
     timelines: applied.sort((a, b) => b.appliedAt!.getTime() - a.appliedAt!.getTime()),
   };
 }

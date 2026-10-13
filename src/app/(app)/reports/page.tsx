@@ -9,7 +9,7 @@ import {
   type JobTimeline,
   REPORT_SOURCES,
   type ReportSource,
-  WEEKS,
+  DAYS,
 } from "@/lib/reports";
 import { companyFromUrl } from "@/lib/types";
 
@@ -75,11 +75,11 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           </Card>
         </div>
 
-        <Card title="Weekly activity" sub={`The last ${WEEKS} weeks, Monday to Sunday`}>
+        <Card title="Daily activity" sub={`The last ${DAYS} days`}>
           <div className="flex flex-col gap-4">
-            <WeekBars label="Jobs in" weeks={r.weeks} k="added" />
-            <WeekBars label="Applied" weeks={r.weeks} k="applied" />
-            <WeekBars label="Rejected" weeks={r.weeks} k="rejected" />
+            <DayBars label="Jobs in" days={r.days} k="added" />
+            <DayBars label="Applied" days={r.days} k="applied" />
+            <DayBars label="Rejected" days={r.days} k="rejected" />
           </div>
         </Card>
 
@@ -187,17 +187,17 @@ function DurationRow({ d }: { d: Duration }) {
 
 const shortDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-function WeekBars({
+function DayBars({
   label,
-  weeks,
+  days,
   k,
 }: {
   label: string;
-  weeks: { start: Date; added: number; applied: number; rejected: number }[];
+  days: { start: Date; added: number; applied: number; rejected: number }[];
   k: "added" | "applied" | "rejected";
 }) {
-  const max = Math.max(1, ...weeks.map((w) => w[k]));
-  const sum = weeks.reduce((a, w) => a + w[k], 0);
+  const max = Math.max(1, ...days.map((d) => d[k]));
+  const sum = days.reduce((a, d) => a + d[k], 0);
   return (
     <div className="grid grid-cols-[110px_1fr] gap-3 items-end">
       <div className="pb-4">
@@ -205,19 +205,19 @@ function WeekBars({
         <div className="text-[11px] text-subtle tabular-nums">{sum} total</div>
       </div>
       <div>
-        <div className="grid gap-[2px] h-[56px] items-end border-b border-line" style={{ gridTemplateColumns: `repeat(${weeks.length}, 1fr)` }}>
-          {weeks.map((w) => (
-            <div key={w.start.toISOString()} className="h-full flex items-end group" title={`Week of ${shortDate(w.start)}: ${w[k]}`}>
+        <div className="grid gap-[2px] h-[56px] items-end border-b border-line" style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}>
+          {days.map((d) => (
+            <div key={d.start.toISOString()} className="h-full flex items-end group" title={`${shortDate(d.start)}: ${d[k]}`}>
               <div
-                className="w-full bg-brand rounded-t-[4px] group-hover:bg-brand-hover"
-                style={{ height: w[k] ? `${Math.max((w[k] / max) * 100, 6)}%` : 0 }}
+                className="w-full bg-brand rounded-t-[3px] group-hover:bg-brand-hover"
+                style={{ height: d[k] ? `${Math.max((d[k] / max) * 100, 6)}%` : 0 }}
               />
             </div>
           ))}
         </div>
         <div className="flex justify-between text-[10.5px] text-faint mt-1 tabular-nums">
-          <span>{shortDate(weeks[0].start)}</span>
-          <span>This week</span>
+          <span>{shortDate(days[0].start)}</span>
+          <span>Today</span>
         </div>
       </div>
     </div>
