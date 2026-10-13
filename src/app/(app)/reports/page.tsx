@@ -80,7 +80,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
           <div className="flex flex-col gap-4">
             <DayBars label="Jobs in" days={r.days} k="added" />
             <DayBars label="Applied" days={r.days} k="applied" />
-            <DayBars label="Rejected" days={r.days} k="rejected" />
+            <DayBars label="Rejected" days={r.days} k="rejected" tone="bad" />
           </div>
         </Card>
 
@@ -208,10 +208,12 @@ function DayBars({
   label,
   days,
   k,
+  tone,
 }: {
   label: string;
   days: { start: Date; added: number; applied: number; rejected: number }[];
   k: "added" | "applied" | "rejected";
+  tone?: "bad";
 }) {
   const max = Math.max(1, ...days.map((d) => d[k]));
   const sum = days.reduce((a, d) => a + d[k], 0);
@@ -226,7 +228,7 @@ function DayBars({
           {days.map((d) => (
             <div key={d.start.toISOString()} className="relative h-full flex items-end group">
               <div
-                className="w-full bg-brand rounded-t-[3px] group-hover:bg-brand-hover"
+                className={`w-full rounded-t-[3px] ${tone === "bad" ? "bg-bad group-hover:bg-bad-ink-2" : "bg-brand group-hover:bg-brand-hover"}`}
                 style={{ height: d[k] ? `${Math.max((d[k] / max) * 100, 6)}%` : 0 }}
               />
               <div
