@@ -9,6 +9,7 @@ import {
   type JobTimeline,
   REPORT_SOURCES,
   type ReportSource,
+  TZ,
   DAYS,
 } from "@/lib/reports";
 import { companyFromUrl } from "@/lib/types";
@@ -185,8 +186,8 @@ function DurationRow({ d }: { d: Duration }) {
   );
 }
 
-const shortDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-const shortTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const shortDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: TZ });
+const shortTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ });
 
 // "just now", "4m ago", "3h ago", "2d ago", "5w ago", "3mo ago", "1y ago".
 function timeAgo(d: Date, now: Date) {
@@ -276,7 +277,7 @@ function ApplicationsTable({ rows }: { rows: JobTimeline[] }) {
                 <td className="px-3 py-2">
                   <StatusPill status={t.status} />
                 </td>
-                <td className="px-3 py-2 tabular-nums whitespace-nowrap" title={t.appliedAt!.toLocaleString("en-US")}>
+                <td className="px-3 py-2 tabular-nums whitespace-nowrap" title={t.appliedAt!.toLocaleString("en-US", { timeZone: TZ, timeZoneName: "short" })}>
                   <span className="block text-muted">
                     {shortDate(t.appliedAt!)} · {shortTime(t.appliedAt!)}
                   </span>

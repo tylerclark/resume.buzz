@@ -13,6 +13,11 @@ const DAY = 86_400_000;
 // An application with no reply after this long is probably not getting one.
 export const GHOSTED_DAYS = 30;
 export const DAYS = 30;
+// Dates are shown and bucketed in this zone, not the server's.
+export const TZ = "America/New_York";
+
+// "2026-10-13": the calendar date of a moment, in TZ.
+const dayKey = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: TZ });
 
 // One job's path through the search: when each step happened, as far as we know.
 export type JobTimeline = {
@@ -131,21 +136,21 @@ export async function getReport(userId: string, source: ReportSource): Promise<R
     },
   ];
 
-  // Calendar days, oldest first, ending with today.
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const days = Array.from({ length: DAYS }, (_, i) => {
-    const start = new Date(today);
-    start.setDate(today.getDate() - (DAYS - 1 - i));
-    return { start, added: 0, applied: 0, rejected: 0 };
-  });
-  const bump = (d: Date | null, key: "added" | "applied" | "rejected") => {
-    if (!d) return;
-    const day = new Date(d);
-    day.setHours(0, 0, 0, 0);
-    // Round so a DST hour shift can't land a day in the wrong bucket.
-    const i = Math.round((day.getTime() - days[0].start.getTime()) / DAY);
-    if (i >= 0 && i < DAYS) days[i][key]++;
+  // Calendar days in TZ, oldest first, ending with today. Each `start` is UTC noon of that
+  // date, which stays on the same calendar day in TZ when it is rendered.
+  const [y, m, d] = dayKey(new Date()).split("-").map(Number);
+  const todayNoon = Date.UTC(y, m - 1, d, 12);
+  const days = Array.from({ length: DAYS }, (_, i) => ({
+    start: new Date(todayNoon - (DAYS - 1 - i) * DAY),
+    added: 0,
+    applied: 0,
+    rejected: 0,
+  }));
+  const index = new Map(days.map((day, i) => [dayKey(day.start), i]));
+  const bump = (at: Date | null, key: "added" | "applied" | "rejected") => {
+    if (!at) return;
+    const i = index.get(dayKey(at));
+    if (i !== undefined) days[i][key]++;
   };
   for (const t of timelines) {
     bump(t.addedAt, "added");
