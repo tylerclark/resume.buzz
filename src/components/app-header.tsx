@@ -359,7 +359,7 @@ function UserMenu({ user, demo }: { user: { name: string; email: string }; demo:
               }}
               className="w-full text-left bg-transparent hover:bg-canvas border-0 rounded-md px-2.5 py-2 text-[13px] font-semibold text-ink cursor-pointer"
             >
-              API tokens
+              API
             </button>
             <button
               role="menuitem"

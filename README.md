@@ -83,7 +83,7 @@ flowchart LR
 
 ## API
 
-Scripts and agents can submit jobs as leads. A submitted job waits in the app until you approve it; nothing is fetched or sent to the model (and no credits are spent) before that. Create a token under **account menu → API tokens** (shown once; only its SHA-256 is stored), then:
+Scripts and agents can submit jobs as leads. A submitted job waits in the app until you approve it; nothing is fetched or sent to the model (and no credits are spent) before that. Create a token under **account menu → API** (shown once; only its SHA-256 is stored). The same dialog has a **Reference** tab with every endpoint, field and status code, and a **Copy docs for your agent** button that produces the whole thing as markdown for an agent's instructions. In short:
 
 ```sh
 curl -X POST https://resume.buzz/api/jobs \
@@ -96,9 +96,9 @@ curl -X POST https://resume.buzz/api/jobs \
 - **Body**: `url` and/or `description` (pasted posting text, 200+ chars), plus optional `title`, `company`, `comp` (pay band, shown in the list), `notes`, `priority`, `source` (a label shown in the app), `prompt`. If `title`/`company`/`comp` are missing, a first `notes` line shaped like `Company — Title — Location — $pay — …` is parsed for them. Unknown fields are ignored. Send an array (or `{"jobs": […]}`) for up to 10 at once.
 - **Dedupe**: a URL you already have (ignoring `utm_*` and similar tracking params) returns the existing job with `"duplicate": true`.
 - **Company conflicts**: every response also carries `"companyConflict": true|false` and a `conflicts` list (`id`, `title`, `company`, `status`, `link`) of your jobs at the same employer (by company name, or by the posting's hostname for non-aggregator sites) with any status other than `not_applied`. The job is still created, since another role at the same company may be fine; an agent should check the flag and decide.
-- **Status**: `GET /api/jobs?ids=a,b` (or `GET /api/jobs/{id}` for one job in full) with the same token. `stage` stays `pending` until you approve the job in the app, then goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
-- **List**: `GET /api/jobs?acted=1` (or `?status=applied,rejected,withdrawn,interviewing,offer,already_applied`, plus `q`, `sort`, `dir`, `offset`, `limit`) pages through your jobs. Each row includes `company`, `status` and `host` (the posting's hostname, lowercased, without `www.`), so an agent can skip employers you've already dealt with before pitching a role.
-- **Mark applied**: `PATCH /api/jobs/{id}` with `{"status": "applied"}` (any status above works) once the agent has sent the application. The first `applied` records the applied date.
+- **Status**: `GET /api/jobs?ids=a,b` (up to 100 ids; or `GET /api/jobs/{id}` for one job in full, including the posting text, requirements, score rationale, keywords and the tailored resume) with the same token. `stage` stays `pending` until you approve the job in the app, then goes `queued → scraping → extracting → scoring → tailoring → rescoring → done` (or `failed`).
+- **List**: `GET /api/jobs?acted=1` (or `?status=applied,rejected,withdrawn,interviewing,offer,already_applied`, plus `q`, `sort`, `dir`, `offset`, `limit`) pages through your jobs (`limit` max 100; `nextOffset` is null on the last page). Each row includes `company`, `status` and `host` (the posting's hostname, lowercased, without `www.`), so an agent can skip employers you've already dealt with before pitching a role.
+- **Mark applied**: `PATCH /api/jobs/{id}` with `{"status": "applied"}` (any status above works) once the agent has sent the application. The first `applied` records the applied date. `{"seen": true}` marks a job as looked at without changing its status.
 - **Limits**: 50 API jobs per rolling 24 hours per user, across both submit endpoints. Tokens only work on `/api/jobs…`.
 
 ### Tailor in one call
@@ -119,9 +119,10 @@ curl -X PATCH https://resume.buzz/api/jobs/… -H "Authorization: Bearer rb_…"
 
 - Same body as `POST /api/jobs` (one job, not an array), plus `skipIfConflict: true` to get a `409` with the clashing jobs instead of tailoring a role at a company you've already dealt with.
 - Send `Accept: application/pdf` to get the PDF back directly instead of JSON; the job id is in the `X-Job-Id` header.
-- `GET /api/jobs/{id}/pdf` returns the tailored resume any time later (`?kind=cover` for the cover letter, once one exists).
+- `GET /api/jobs/{id}/pdf` returns the tailored resume any time later (`?kind=cover` for the cover letter, once one exists; `409` with `stage` if it isn't tailored yet).
 - A URL you already have returns that job (`"duplicate": true`) without tailoring again; if it was still waiting or had failed, it's tailored now.
-- `422` with `error` means the pipeline failed (page needs a login, no posting found…); fix the input or send `description` instead. `202` means it's still running after the wait: poll `GET /api/jobs/{id}` until `stage` is `done`, or just re-send the same request.
+- `422` with `error` means the pipeline failed (page needs a login, no posting found…); fix the input or send `description` instead. `202` means it's still running after the wait: poll `GET /api/jobs/{id}` until `stage` is `done`, or just re-send the same request. `410` means the user deleted the job while it was tailoring.
+- Tokens can't approve, retry, re-tailor or delete jobs, write cover letters, or touch the resume, facts or tokens; those routes answer `401` to a token.
 
 In the app, submitted jobs sort to the top of Recent until opened and carry an **API** badge. Opening one shows who sent it, its notes, and **Tailor resume** / **Not interested**; once tailored, the same card offers **No longer interested** / **Mark applied**.
 
