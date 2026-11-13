@@ -126,9 +126,9 @@ const summaryColumns = {
   updatedAt: job.updatedAt,
 };
 
-// ORDER BY for a job list. In the default order, jobs prepared in the background that haven't been looked
-// at yet come first; an explicitly chosen sort is left pure. Then the chosen key; ties (and everything for
-// "status") fall back to newest first, with the id as a final tiebreak so pagination is stable.
+// ORDER BY for a job list: the chosen key first. Within a status, jobs prepared in the background that
+// haven't been looked at yet come before the rest; other sorts are left pure. Ties fall back to newest
+// first, with the id as a final tiebreak so pagination is stable.
 function jobOrder(sort: JobSort, dir: SortDir) {
   const key = {
     // Live conversations (offer, interviewing) → not applied → applied → already applied → no longer
@@ -142,8 +142,8 @@ function jobOrder(sort: JobSort, dir: SortDir) {
     company: sql`lower(nullif(${job.company}, ''))`,
   }[sort];
   return [
-    ...(sort === DEFAULT_SORT.key ? [sql`(${job.source} <> 'app' and ${job.seenAt} is null) desc`] : []),
     sql`${key} ${sql.raw(dir)} nulls last`,
+    ...(sort === DEFAULT_SORT.key ? [sql`(${job.source} <> 'app' and ${job.seenAt} is null) desc`] : []),
     desc(job.createdAt),
     desc(job.id),
   ];
