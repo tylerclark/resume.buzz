@@ -214,7 +214,7 @@ export const ENDPOINTS: Endpoint[] = [
       { name: "q", type: "string", note: "Substring match on title, company or URL." },
       { name: "status", type: "string", note: `Comma-separated statuses to include: ${JOB_STATUS_KEYS.join(", ")}.` },
       { name: "acted", type: "1", note: "Every status except not_applied. Ignored when status is given." },
-      { name: "sort", type: "string", note: `${JOB_SORT_KEYS.join(" | ")}. Default status (to-do first, then applied, already applied, rejected, withdrawn).` },
+      { name: "sort", type: "string", note: `${JOB_SORT_KEYS.join(" | ")}. Default status (offer, interviewing, not applied, applied, already applied, withdrawn, rejected).` },
       { name: "dir", type: "asc | desc", note: "Defaults per sort: asc for status, title, company; desc for the rest." },
       { name: "offset", type: "number", note: "Default 0." },
       { name: "limit", type: "number", note: `Default ${DEFAULT_PAGE}, max ${MAX_PAGE}.` },

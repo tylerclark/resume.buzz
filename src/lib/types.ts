@@ -117,8 +117,8 @@ export type JobStatus = keyof typeof JOB_STATUSES;
 export const isJobStatus = (s: unknown): s is JobStatus => typeof s === "string" && s in JOB_STATUSES;
 
 // How the Recent list can be ordered. `dir` is the direction that makes sense by default for each key;
-// the user can flip it. "status" is the working order: jobs still to apply to first, applied further
-// down, then already-applied, rejected, and no-longer-interested at the very bottom.
+// the user can flip it. "status" is the working order: offers and interviews first, then jobs still to
+// apply to, applied, already-applied, no-longer-interested, and rejected at the very bottom.
 export const JOB_SORTS = {
   status: { label: "Status", dir: "asc" },
   score: { label: "Score", dir: "desc" },
