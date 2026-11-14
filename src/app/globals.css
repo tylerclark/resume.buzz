@@ -48,6 +48,7 @@
   --color-ok-bg: #e6f7ee;
   --color-ok-mark: #d3f5e1;
   --color-ok-line: #9fe0bb;
+  --color-warn: #e0a31a;
   --color-warn-ink: #a56a00;
   --color-warn-ink-2: #6b4a00;
   --color-warn-bg: #fff4dd;
@@ -112,6 +113,7 @@
     --color-ok-bg: #0d1f15;
     --color-ok-mark: #143d25;
     --color-ok-line: #1c5a35;
+    --color-warn: #f0b94b;
     --color-warn-ink: #f0b94b;
     --color-warn-ink-2: #f5cd7a;
     --color-warn-bg: #24190a;

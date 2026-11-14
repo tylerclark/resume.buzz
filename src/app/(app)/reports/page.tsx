@@ -56,6 +56,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
                 { label: source === "api" ? "Suggested" : "Jobs in", n: r.total },
                 { label: "Applied", n: r.applied },
                 { label: "Heard back", n: heardBack },
+                { label: "Not heard back", n: r.awaiting, tone: "warn" },
                 { label: "Interviewing", n: r.interviewed },
                 { label: "Offer", n: r.offers },
                 { label: "Rejected", n: r.rejected, tone: "bad" },
@@ -135,7 +136,7 @@ function Stat({ label, value, note }: { label: string; value: number; note?: str
   );
 }
 
-function Funnel({ total, steps }: { total: number; steps: { label: string; n: number; tone?: "bad" }[] }) {
+function Funnel({ total, steps }: { total: number; steps: { label: string; n: number; tone?: "bad" | "warn" }[] }) {
   return (
     <div className="flex flex-col gap-2">
       {steps.map((s) => (
@@ -143,7 +144,7 @@ function Funnel({ total, steps }: { total: number; steps: { label: string; n: nu
           <span className="text-[12.5px] font-semibold text-muted">{s.label}</span>
           <span className="h-5 bg-well rounded-[4px] overflow-hidden">
             <span
-              className={`block h-full rounded-[4px] ${s.tone === "bad" ? "bg-bad" : "bg-brand"}`}
+              className={`block h-full rounded-[4px] ${s.tone === "bad" ? "bg-bad" : s.tone === "warn" ? "bg-warn" : "bg-brand"}`}
               style={{ width: total ? `${Math.max((s.n / total) * 100, s.n ? 1.5 : 0)}%` : 0 }}
             />
           </span>
